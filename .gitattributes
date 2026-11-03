@@ -1,0 +1,8 @@
+# Terraform/HCL and shell files must stay LF on Windows checkouts (scoped; no text=auto)
+*.tf text eol=lf
+*.hcl text eol=lf
+*.tftest.hcl text eol=lf
+.terraform.lock.hcl text eol=lf
+*.tfvars.example text eol=lf
+*.hcl.example text eol=lf
+*.sh text eol=lf
