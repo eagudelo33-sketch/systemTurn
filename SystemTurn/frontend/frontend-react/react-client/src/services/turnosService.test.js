@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { callNextTurn, cancelarTurno } from './turnosService.js'
+import { callNextTurn, cancelarTurno, solicitarTurno } from './turnosService.js'
 
 function stubFetchResponse(status, body) {
   const response = {
@@ -39,6 +39,41 @@ describe('callNextTurn', () => {
     stubFetchResponse(200, { id: 7, codigo: 'T-007' })
 
     await expect(callNextTurn()).resolves.toEqual({ id: 7, codigo: 'T-007' })
+  })
+})
+
+describe('Service maps 503', () => {
+  const MENSAJE = 'Servicio no disponible, intenta de nuevo en unos minutos.'
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('rejects solicitarTurno with the body mensaje and keeps the code, not refreshable', async () => {
+    stubFetchResponse(503, { error: 'SERVICIO_NO_DISPONIBLE', mensaje: MENSAJE })
+
+    const error = await solicitarTurno().catch((e) => e)
+
+    expect(error.message).toBe(MENSAJE)
+    expect(error.code).toBe('SERVICIO_NO_DISPONIBLE')
+    expect(error.refreshable).toBeUndefined()
+  })
+
+  it('falls back to a friendly Spanish message when the body has no mensaje', async () => {
+    stubFetchResponse(503, { error: 'SERVICIO_NO_DISPONIBLE' })
+
+    await expect(callNextTurn()).rejects.toMatchObject({
+      message: 'El servicio no está disponible en este momento. Intenta de nuevo en unos minutos.',
+      code: 'SERVICIO_NO_DISPONIBLE',
+    })
+  })
+
+  it('does not apply to a 503 without the SERVICIO_NO_DISPONIBLE code', async () => {
+    stubFetchResponse(503, {})
+
+    await expect(cancelarTurno(1)).rejects.toMatchObject({
+      message: 'No se pudo completar la operación.',
+    })
   })
 })
 

@@ -128,7 +128,7 @@ class DemoSeedRunnerTest {
      */
     @Nested
     @SpringBootTest(properties = "turnos.test-context=demo-seed-demo")
-    @ActiveProfiles({"test", "demo"})
+    @ActiveProfiles({"dev", "demo", "test"})
     class DemoProfile {
 
         @Autowired
