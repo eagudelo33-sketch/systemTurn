@@ -6,3 +6,4 @@
 *.tfvars.example text eol=lf
 *.hcl.example text eol=lf
 *.sh text eol=lf
+.trivyignore text eol=lf
