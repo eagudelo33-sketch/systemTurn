@@ -1,5 +1,6 @@
 package com.systemturn.turnos.web;
 
+import com.systemturn.turnos.domain.ConflictoException;
 import com.systemturn.turnos.domain.FilaVaciaException;
 import com.systemturn.turnos.domain.OperacionInvalidaException;
 import com.systemturn.turnos.domain.TurnoNoEncontradoException;
@@ -28,5 +29,11 @@ public class ApiExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorResponse operacionInvalida(OperacionInvalidaException e) {
         return new ErrorResponse("OPERACION_INVALIDA", e.getMessage());
+    }
+
+    @ExceptionHandler(ConflictoException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ErrorResponse conflicto(ConflictoException e) {
+        return new ErrorResponse("CONFLICTO", e.getMessage());
     }
 }

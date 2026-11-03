@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.nullValue;
@@ -15,6 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
+@ActiveProfiles({"test", "demo"})
 @AutoConfigureMockMvc
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 class TurnoControllerTest {
@@ -43,7 +45,7 @@ class TurnoControllerTest {
                 .andExpect(jsonPath("$.turnos[6].codigo").value("T-007"))
                 .andExpect(jsonPath("$.turnos[6].estado").value("Cancelado"))
                 .andExpect(jsonPath("$.turnos[6].horaAtencion").value("-"))
-                .andExpect(jsonPath("$.turnos[9].codigo").value("T-009"));
+                .andExpect(jsonPath("$.turnos[9].codigo").value("T-010"));
     }
 
     @Test
@@ -51,8 +53,8 @@ class TurnoControllerTest {
         mvc.perform(post(BASE))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(12))
-                .andExpect(jsonPath("$.codigo").value("T-011"))
-                .andExpect(jsonPath("$.numero").value(11))
+                .andExpect(jsonPath("$.codigo").value("T-012"))
+                .andExpect(jsonPath("$.numero").value(12))
                 .andExpect(jsonPath("$.horaAtencion").value(nullValue()))
                 .andExpect(jsonPath("$.estado").value("Pendiente"))
                 .andExpect(jsonPath("$.posicionFila").value(6));
@@ -60,7 +62,7 @@ class TurnoControllerTest {
 
     @Test
     void siguienteAttendsInFifoOrderThenReturns404WhenEmpty() throws Exception {
-        for (String codigo : new String[]{"T-006", "T-007", "T-008", "T-009", "T-010"}) {
+        for (String codigo : new String[]{"T-006", "T-008", "T-009", "T-010", "T-011"}) {
             mvc.perform(patch(BASE + "/siguiente"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.codigo").value(codigo))

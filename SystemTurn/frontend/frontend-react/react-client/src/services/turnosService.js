@@ -6,6 +6,8 @@ const ESTADOS = {
   Cancelado: 'CANCELADO',
 }
 
+const MENSAJE_CONFLICTO = 'El turno cambió mientras se procesaba. Actualiza e intenta de nuevo.'
+
 const ADVISOR_STATUS = {
   Pendiente: 'pending',
   Atendido: 'attended',
@@ -36,6 +38,12 @@ async function request(path, options = {}) {
   if (response.status === 204) return null
   const data = await response.json().catch(() => null)
   if (!response.ok) {
+    if (data?.error === 'CONFLICTO') {
+      const conflicto = new Error(MENSAJE_CONFLICTO)
+      conflicto.code = 'CONFLICTO'
+      conflicto.refreshable = true
+      throw conflicto
+    }
     const error = new Error(data?.mensaje || 'No se pudo completar la operación.')
     error.code = data?.error
     throw error
@@ -137,7 +145,7 @@ export async function callNextTurn() {
     return await request('/api/v1/turnos/siguiente', { method: 'PATCH' })
   } catch (error) {
     if (error.code === 'FILA_VACIA') {
-      throw new Error('No hay turnos pendientes en la fila.')
+      throw new Error('No hay turnos pendientes en la fila.', { cause: error })
     }
     throw error
   }

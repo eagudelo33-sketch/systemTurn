@@ -1,33 +1,29 @@
 package com.systemturn.turnos.infrastructure;
 
 import com.systemturn.turnos.application.TurnoService;
+import com.systemturn.turnos.domain.TurnoRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.Resource;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.time.Clock;
+import java.time.ZoneId;
 
 @Configuration
 public class TurnosConfig {
 
+    private static final int MAX_INTENTOS = 10;
+
     @Bean
-    Clock clock() {
-        return Clock.systemDefaultZone();
+    Clock clock(@Value("${turnos.timezone:America/Bogota}") String timezone) {
+        return Clock.system(ZoneId.of(timezone));
     }
 
     @Bean
-    InMemoryTurnoRepository turnoRepository(@Value("${turnos.seed-file}") Resource seed) {
-        InMemoryTurnoRepository repository = new InMemoryTurnoRepository();
-        CsvSeedLoader.load(seed, repository);
-        return repository;
-    }
-
-    @Bean
-    TurnoService turnoService(InMemoryTurnoRepository repository, Clock clock) {
-        return new TurnoService(repository, clock);
+    TurnoService turnoService(TurnoRepository repository, Clock clock) {
+        return new TurnoService(repository, clock, MAX_INTENTOS);
     }
 
     @Bean
