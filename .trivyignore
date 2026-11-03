@@ -1,0 +1,3 @@
+# AWS-0132 (HIGH): state bucket uses SSE-S3 (AES256) by design. A customer managed KMS key is out of scope
+# for this change (costs about $1/month plus API calls; spec infra-state-backend requires AES256).
+AWS-0132

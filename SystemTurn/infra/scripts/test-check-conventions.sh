@@ -48,7 +48,7 @@ printf 'a = 1\r\n' > "$SB/SystemTurn/infra/bootstrap/c.tf"; git -C "$SB" add Sys
 expect crlf_is_caught 1 -- tracked_infra_files_have_no_crlf
 printf 'a = 1\n' > "$SB/SystemTurn/infra/bootstrap/c.tf"
 expect lf_passes 0 -- tracked_infra_files_have_no_crlf
-printf 'x = "%s"\n' 111122223333 > "$SB/SystemTurn/infra/bootstrap/c.tf"
+printf 'x = "%s%s"\n' 1111 22223333 > "$SB/SystemTurn/infra/bootstrap/c.tf"
 expect account_id_is_caught 1 -- no_account_id_in_tracked_infra_files
 printf 'x = "%s"\n' 123456789012 > "$SB/SystemTurn/infra/bootstrap/c.tf"
 expect placeholder_account_id_passes 0 -- no_account_id_in_tracked_infra_files
