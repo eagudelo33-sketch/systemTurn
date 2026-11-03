@@ -1,0 +1,5 @@
+server:
+  port: 8080
+turnos:
+  seed-file: classpath:turnos_hoy.csv
+  allowed-origins: http://localhost:4200,http://localhost:5173,http://127.0.0.1:5173

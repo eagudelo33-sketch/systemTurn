@@ -1,0 +1,12 @@
+numero,hora_solicitud,hora_atencion,estado
+1,8:02,8:05,atendido
+2,8:06,8:15,atendido
+3,8:10,8:24,atendido
+4,8:15,8:31,atendido
+5,8:21,8:40,atendido
+6,8:25,,pendiente
+9,8:41,,pendiente
+7,8:30,,cancelado
+7,8:34,,pendiente
+8,8:38,,pendiente
+10,8:45,,pendiente
