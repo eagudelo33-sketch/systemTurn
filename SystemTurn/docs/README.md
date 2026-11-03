@@ -9,6 +9,7 @@ These docs capture **what SystemTurn is today** and **what is still missing**, a
 | 1 | This page | What is SDD and why are we writing docs first? |
 | 2 | [01-current-state.md](01-current-state.md) | What does the system actually do right now? |
 | 3 | [02-gaps-and-questions.md](02-gaps-and-questions.md) | Where does the code differ from the plan, and what must we decide? |
+| 4 | [infra-onboarding.md](infra-onboarding.md) | How do I bring up the AWS state bucket, budget and env roots? |
 
 ## The product in one paragraph
 
