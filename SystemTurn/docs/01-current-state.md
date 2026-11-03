@@ -1,4 +1,4 @@
-# Current State (as of 2026-11-02)
+# Current State (as of 2026-11-03)
 
 What the code does **today**, verified by reading the source. When this disagrees with the whiteboard or diagram, the code wins here; the differences are listed in [02-gaps-and-questions.md](02-gaps-and-questions.md).
 
@@ -9,7 +9,8 @@ What the code does **today**, verified by reading the source. When this disagree
 | Backend API (4 endpoints) | ✅ Working, tested |
 | Advisor view | ✅ Working against real API |
 | Client view | ✅ Working against real API (with limitations) |
-| Database | ✅ H2 file database + Spring Data JPA + Flyway. Data survives restarts |
+| Database | ✅ PostgreSQL (production) + Spring Data JPA + Flyway. H2 file database only under the `dev` profile. Data survives restarts |
+| Operations | ✅ Env-driven datasource, startup guards, health probes that ignore the database, graceful shutdown, fast `503` when the database is down |
 | Real-time updates | ❌ Not implemented — manual refresh |
 | Frontend tests | ✅ Vitest, service level only (no component tests for the views) |
 | Postman collection | ❌ Not in repo |
@@ -27,9 +28,9 @@ Spring Boot API (:8080)
    infrastructure/ → adapters: persistence/ (JPA + Flyway), DemoSeedRunner, CsvSeedLoader, Spring config
 ```
 
-**Why this layering matters (hexagonal architecture).** The `domain` knows nothing about Spring, HTTP, or storage. `TurnoRepository` is an *interface* (a "port"); `JpaTurnoRepository` (in `infrastructure/persistence`) is one *implementation* (an "adapter"). That is how memory was replaced by H2 without rewriting the business rules: only a new adapter was added. Protect this boundary. The unit tests use an in-memory fake that lives in the test sources only (`testsupport/InMemoryTurnoRepository`).
+**Why this layering matters (hexagonal architecture).** The `domain` knows nothing about Spring, HTTP, or storage. `TurnoRepository` is an *interface* (a "port"); `JpaTurnoRepository` (in `infrastructure/persistence`) is one *implementation* (an "adapter"). That is how memory was replaced by H2, and later H2 by PostgreSQL, without rewriting the business rules: only the adapter and its configuration changed. Protect this boundary. The unit tests use an in-memory fake that lives in the test sources only (`testsupport/InMemoryTurnoRepository`).
 
-The schema is owned by Flyway (`db/migration/V1__create_turno.sql`). Hibernate only validates it (`ddl-auto: validate`); it never creates or alters tables.
+The schema is owned by Flyway (`db/migration/V1__create_turno.sql`), one file shared by H2 and PostgreSQL (no vendor-specific folders). Hibernate only validates it (`ddl-auto: validate`); it never creates or alters tables.
 
 ## Domain model
 
@@ -75,6 +76,8 @@ Only `PENDIENTE` can change. Any other transition throws `OperacionInvalidaExcep
 | Request/attend time = server clock, truncated to seconds | `Turno` |
 | Average wait = mean of (`horaAtencion − horaSolicitud`) over **attended** tickets of today only, in minutes, 1 decimal | `TurnoService.esperaPromedioMin` |
 | Concurrency is resolved by the database (unique constraint + version), not by `synchronized` locks | `JpaTurnoRepository` |
+| A duplicate number is recognised by the **constraint name**, compared case-insensitively (H2 reports `UK_TURNO_FECHA_NUMERO`, PostgreSQL `uk_turno_fecha_numero`). Other integrity violations are not reported as duplicates | `JpaTurnoRepository` |
+| If the database cannot be reached (connection acquisition fails or times out), the adapter raises `ServicioNoDisponibleException` → HTTP 503. It is never retried | `JpaTurnoRepository`, `ApiExceptionHandler` |
 | The CSV is **demo-only**: it is loaded only under the `demo` Spring profile, dated today, and skipped if today already has tickets (no duplicates on restart) | `DemoSeedRunner`, `CsvSeedLoader` |
 
 With the demo seed: pending 5, attended 5, cancelled 1, average wait 12.2 min. Numbers run `T-001` to `T-011`, so the next requested ticket is `T-012`. Without the `demo` profile the database starts empty.
@@ -97,8 +100,11 @@ Error body: `{ "error": "FILA_VACIA", "mensaje": "No hay personas esperando en l
 | 404 | `FILA_VACIA` / `TURNO_NO_ENCONTRADO` | Empty queue / unknown id |
 | 400 | `OPERACION_INVALIDA` | Ticket is not pending, or it belongs to a past day |
 | 409 | `CONFLICTO` | Concurrent change: the ticket changed while being processed, or no free number after 10 attempts |
+| 503 | `SERVICIO_NO_DISPONIBLE` | The database is unreachable. Fails within the Hikari connection timeout (5 s). The message is Spanish and never contains driver or SQL details |
 
 The 409 message is exactly: `El turno cambió mientras se procesaba. Actualiza e intenta de nuevo.` The client should refresh and try again.
+
+The 503 message is exactly: `El servicio no está disponible en este momento. Intenta de nuevo en unos minutos.` Refreshing does not help; the service must come back first.
 
 Dashboard example (shape):
 
@@ -117,7 +123,7 @@ In `turnos[]`, unattended tickets show `horaAtencion: "-"`.
 | Piece | What it does |
 |-------|--------------|
 | `App.jsx` | Switches views by URL: `/` = client, `/?vista=asesor` = advisor |
-| `services/turnosService.js` | The only place that calls the API. Normalizes responses for the views. Maps `CONFLICTO` to a friendly, refreshable error. |
+| `services/turnosService.js` | The only place that calls the API. Normalizes responses for the views. Maps `CONFLICTO` to a friendly, refreshable error and `SERVICIO_NO_DISPONIBLE` (503) to an error carrying the server message (a Spanish fallback if the body has none) and `code`, not refreshable. |
 | `views/ClienteView.jsx` | Request ticket, see number/state/position, cancel (with confirm), manual refresh, stats. On a cancel conflict it re-fetches the ticket and keeps the message |
 | `views/AsesorView.jsx` | Next ticket card, "call next" button, full table with search by number and filter by state, loading/error/empty states. On a conflict it refreshes the panel, then shows the message (no retry button) |
 | `services/turnosSimulation.js` | Old offline mock. **Not used** anymore. |
@@ -127,48 +133,113 @@ In `turnos[]`, unattended tickets show `horaAtencion: "-"`.
 
 ## Tests
 
+Backend: **147 tests**, `./mvnw test`. The 17 PostgreSQL tests need Docker (see below); everything else runs without it.
+
 | Suite | Tests | Covers |
 |-------|-------|--------|
 | `TurnoServiceTest` | 22 | FIFO, daily numbering, midnight boundary, yesterday excluded, retry exhaustion, cancel rules, stale write |
 | `TurnoTest` | 7 | Domain rules: state machine, equality by id, past-day cancel |
-| `JpaTurnoRepositoryTest` | 6 | Flyway schema + `validate`, time precision, duplicate number, version conflict |
-| `SolicitarConcurrencyTest` | 2 | 10 threads requesting at once get numbers 1..10 without gaps or duplicates |
-| `RestartSurvivalTest` | 1 | Tickets survive an application restart on the same file database |
+| `JpaTurnoRepositoryTest` | 8 | H2: Flyway schema + `validate`, time precision, duplicate number, unrelated violations, version conflict |
+| `JpaTurnoRepositoryTranslationTest` | 20 | Duplicate detection on fabricated exception chains (upper, lower, mixed, quoted, schema-qualified, no name); DB-unreachable translation to `ServicioNoDisponibleException` |
+| `DatabaseDownFailFastTest` | 2 | A closed port makes each port call fail within the Hikari timeout + 2 s |
+| `SolicitarConcurrencyTest` | 2 | 10 threads requesting at once get numbers 1..10 without gaps or duplicates (H2) |
+| `RestartSurvivalTest` | 1 | Tickets survive an application restart on the same H2 file |
+| `RetryExhaustionTest` | 2 | Every retry hits a duplicate number: the response is 409 `CONFLICTO` |
+| `StartupGuardTest` | 17 | Guard rules (H2 outside `dev`/`test`, `demo` without `dev`, missing URL) as pure rules and as real boots |
+| `ConfigBindingTest` | 9 | Env-driven datasource, defaults, pool override, no committed secrets, `V1` untouched, `dev` starts empty |
+| `HealthGroupsTest` | 4 | Probes `UP` with a healthy and with an unreachable database; only `health` is exposed |
+| `GracefulShutdownTest` | 2 | Graceful shutdown configuration; an in-flight request completes while the context closes |
 | `DemoSeedRunnerTest` | 9 | Demo seed per day, idempotent restart, no seed in the default profile |
+| `DemoSeedAtomicityTest` | 2 | The demo seed is all-or-nothing |
 | `TurnoControllerTest` | 6 | HTTP status codes and JSON shape for the endpoints |
-| `ConflictoHandlerTest` | 4 | 409 `CONFLICTO` body on solicitar / siguiente / cancelar |
+| `ConflictoHandlerTest` | 6 | 409 `CONFLICTO` body on solicitar / siguiente / cancelar; 503 body without driver details; other shapes unchanged |
 | `InMemoryTurnoRepositoryTest` | 5 | The test fake behaves like the real port |
+| `EnabledIfDockerOrRequiredTest` | 5 | The Docker gate: skip without Docker, fail when `requireDocker=true` |
 | `TurnosApiApplicationTests` | 1 | Spring context loads |
-| **Backend total** | **63** | `./mvnw test` |
-| Frontend `turnosService.test.js` | 8 | Vitest. Response normalization and `CONFLICTO` mapping. No component tests for the views |
+| `JpaTurnoRepositoryPostgresTest` | 12 | **PostgreSQL.** The whole repository contract, lowercase constraint name, Flyway `V1` + validation, Bogota time with the JVM in UTC |
+| `SolicitarConcurrencyPostgresTest` | 3 | **PostgreSQL.** 10 threads get numbers 1..10 exactly once |
+| `RestartSurvivalPostgresTest` | 2 | **PostgreSQL.** Two contexts on one container: tickets 1-11 and their states survive |
+| **Backend total** | **147** | `./mvnw test` |
+| Frontend `turnosService.test.js` | 11 | Vitest. Response normalization, `CONFLICTO` and `SERVICIO_NO_DISPONIBLE` mapping. No component tests for the views |
+
+### PostgreSQL test suite and `requireDocker`
+
+The `*PostgresTest` classes subclass the H2 test classes and run them against one shared `postgres:17.10` container (Testcontainers). Docker is detected by `DockerOrRequiredCondition`:
+
+| Docker | `-DrequireDocker` | Result |
+|--------|-------------------|--------|
+| Available | any | The PostgreSQL tests run |
+| Missing | unset or `false` | They are **skipped**; the H2 suite is unaffected |
+| Missing | `true` | They **fail**, with a message mentioning `requireDocker` (so a CI run cannot go green by skipping) |
+
+Use `./mvnw test -DrequireDocker=true` when you must be sure the PostgreSQL suite ran. Turning it on in CI is part of the `infra-cicd` change.
 
 The service tests use a fixed zoned `Clock`, so they are deterministic. Keep that pattern.
 
 ## Tech versions
 
-Java 17 · Spring Boot 4.1.2 · H2 (file) · Spring Data JPA · Flyway · Maven wrapper · React 19 · Vite 8 · Vitest · ESLint 10
+Java 17 · Spring Boot 4.1.2 · PostgreSQL 17 (prod) · H2 (file, `dev` only) · Spring Data JPA · Flyway · Actuator · Testcontainers · Maven wrapper · React 19 · Vite 8 · Vitest · ESLint 10
 
 ## Configuration
 
+The datasource has **no default URL**: outside the `dev` profile the app needs `SPRING_DATASOURCE_URL`. Nothing secret is committed.
+
 | Setting | Default | Meaning |
 |---------|---------|---------|
-| `TURNOS_DB_PATH` (env var) | `./data/turnos` | Path of the H2 database file (`jdbc:h2:file:${TURNOS_DB_PATH}`), without extension. The `data/` folder is git-ignored. Use forward slashes on Windows |
+| `SPRING_DATASOURCE_URL` (env var) | none (required outside `dev`) | PostgreSQL JDBC URL. TLS (`sslmode`) and `socketTimeout` belong in this URL |
+| `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` (env vars) | none | Database credentials |
+| `TURNOS_DB_POOL_SIZE` (env var) | `10` | Hikari maximum pool size. Pool size x task count must stay below the database `max_connections` |
+| `spring.datasource.hikari.connection-timeout` | `5000` ms | Why a DB outage returns 503 within about 5 s |
+| `TURNOS_DB_CONNECT_RETRIES` (env var) | `10` | Flyway connect retries at startup |
+| `TURNOS_DB_PATH` (env var) | `./data/turnos` | H2 file path (`jdbc:h2:file:${TURNOS_DB_PATH}`), **`dev` profile only**, without extension. The `data/` folder is git-ignored. Use forward slashes on Windows |
 | `turnos.timezone` | `America/Bogota` | Zone that defines "today" for the queue |
 | `turnos.seed-file` | `classpath:turnos_hoy.csv` | CSV loaded by the `demo` profile |
-| Spring profile `demo` | off | Loads the sample queue dated today (see business rules) |
-| `turnos.allowed-origins` | localhost `:4200`, `:5173` | CORS origins |
+| `TURNOS_ALLOWED_ORIGINS` (`turnos.allowed-origins`) | localhost `:4200`, `:5173`, `127.0.0.1:5173` | CORS origins |
+| `SPRING_PROFILES_ACTIVE` | none | Active profiles |
+| `server.shutdown` / `spring.lifecycle.timeout-per-shutdown-phase` | `graceful` / `25s` | In-flight requests finish before the ECS 30 s stop timeout |
+
+### Profiles
+
+| Profile | Database | Notes |
+|---------|----------|-------|
+| none | PostgreSQL from `SPRING_DATASOURCE_*` | Production. Fails to start if the URL is missing or points to H2 |
+| `dev` | H2 file at `TURNOS_DB_PATH` | Zero-Docker local setup, same `V1` migration |
+| `demo` | (inherits) | Seeds 11 sample tickets for today. Only allowed together with `dev` |
+| `test` | In-memory H2 (unique per context) | Used by the automated tests. Never set it in production |
+
+### Startup guards
+
+`StartupGuard` rejects unsafe setups before Hikari connects or Flyway migrates: no `spring.datasource.url` outside `dev`/`test` (Boot would silently use an embedded database), a `jdbc:h2:` URL outside `dev`/`test`, and `demo` without `dev`. It cannot catch a production task started with `test`; the ECS task definition must prevent that.
+
+### Health endpoints
+
+Only `health` is exposed over HTTP (`/actuator/env`, `/actuator/beans` return 404).
+
+| Path | Includes the database? | Use |
+|------|------------------------|-----|
+| `/actuator/health/readiness` | No (`readinessState` only) | ALB target health check |
+| `/actuator/health/liveness` | No (`livenessState` only) | Liveness probe |
+| `/actuator/health` | Yes, as an aggregate status (no details) | Operators. It turns `DOWN` (503) when the database is unreachable |
+
+With the database down the instance stays in rotation: requests that need the database answer `503 SERVICIO_NO_DISPONIBLE` instead of the task being pulled out (an RDS failover must not remove every task).
 
 ## How to run
 
 ```powershell
-# Terminal 1
+# Terminal 1 (local development on H2, no Docker)
 cd backend\turnos-api
-.\mvnw.cmd spring-boot:run     # http://localhost:8080, empty queue
-# or, with the sample queue (demo profile):
-.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=demo"
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=dev"        # http://localhost:8080, empty queue
+# or, with the sample queue:
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=dev,demo"
 
-# custom database file (optional, set before starting)
+# custom H2 file (optional, set before starting)
 $env:TURNOS_DB_PATH = "C:/data/turnos"
+
+# against PostgreSQL (no profile)
+$env:SPRING_DATASOURCE_URL = "jdbc:postgresql://localhost:5432/turnos"
+$env:SPRING_DATASOURCE_USERNAME = "turnos"
+$env:SPRING_DATASOURCE_PASSWORD = "<password>"
+.\mvnw.cmd spring-boot:run
 
 # Terminal 2
 cd frontend\frontend-react\react-client
@@ -177,4 +248,4 @@ npm run dev                    # http://localhost:5173
 npm test                       # Vitest (frontend)
 ```
 
-Backend tests: `.\mvnw.cmd test` from `backend\turnos-api`.
+Backend tests: `.\mvnw.cmd test` from `backend\turnos-api` (add `"-DrequireDocker=true"` to fail instead of skipping when Docker is missing).

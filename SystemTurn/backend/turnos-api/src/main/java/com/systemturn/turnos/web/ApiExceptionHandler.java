@@ -3,6 +3,7 @@ package com.systemturn.turnos.web;
 import com.systemturn.turnos.domain.ConflictoException;
 import com.systemturn.turnos.domain.FilaVaciaException;
 import com.systemturn.turnos.domain.OperacionInvalidaException;
+import com.systemturn.turnos.domain.ServicioNoDisponibleException;
 import com.systemturn.turnos.domain.TurnoNoEncontradoException;
 import com.systemturn.turnos.web.Responses.ErrorResponse;
 import org.springframework.http.HttpStatus;
@@ -35,5 +36,12 @@ public class ApiExceptionHandler {
     @ResponseStatus(HttpStatus.CONFLICT)
     public ErrorResponse conflicto(ConflictoException e) {
         return new ErrorResponse("CONFLICTO", e.getMessage());
+    }
+
+    /** Fixed friendly message only: the cause (driver, URL, SQL) is never written to the response. */
+    @ExceptionHandler(ServicioNoDisponibleException.class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    public ErrorResponse servicioNoDisponible(ServicioNoDisponibleException e) {
+        return new ErrorResponse("SERVICIO_NO_DISPONIBLE", e.getMessage());
     }
 }

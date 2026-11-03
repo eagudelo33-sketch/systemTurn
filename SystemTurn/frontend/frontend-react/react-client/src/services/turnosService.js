@@ -8,6 +8,8 @@ const ESTADOS = {
 
 const MENSAJE_CONFLICTO = 'El turno cambió mientras se procesaba. Actualiza e intenta de nuevo.'
 
+const MENSAJE_NO_DISPONIBLE = 'El servicio no está disponible en este momento. Intenta de nuevo en unos minutos.'
+
 const ADVISOR_STATUS = {
   Pendiente: 'pending',
   Atendido: 'attended',
@@ -43,6 +45,11 @@ async function request(path, options = {}) {
       conflicto.code = 'CONFLICTO'
       conflicto.refreshable = true
       throw conflicto
+    }
+    if (data?.error === 'SERVICIO_NO_DISPONIBLE') {
+      const noDisponible = new Error(data.mensaje || MENSAJE_NO_DISPONIBLE)
+      noDisponible.code = 'SERVICIO_NO_DISPONIBLE'
+      throw noDisponible
     }
     const error = new Error(data?.mensaje || 'No se pudo completar la operación.')
     error.code = data?.error

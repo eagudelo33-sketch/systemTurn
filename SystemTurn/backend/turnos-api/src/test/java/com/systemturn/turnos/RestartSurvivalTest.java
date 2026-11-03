@@ -22,10 +22,16 @@ class RestartSurvivalTest {
     @TempDir
     Path directorio;
 
-    private ConfigurableApplicationContext arrancar() {
+    /** Command-line arguments that point every start at the database under test (an H2 file here). */
+    String[] argumentos() {
+        return new String[] {"--spring.profiles.active=test",
+                "--spring.datasource.url=jdbc:h2:file:" + directorio.resolve("turnos").toAbsolutePath().toString().replace('\\', '/')};
+    }
+
+    ConfigurableApplicationContext arrancar() {
         return new SpringApplicationBuilder(TurnosApiApplication.class)
                 .web(WebApplicationType.NONE)
-                .run("--spring.datasource.url=jdbc:h2:file:" + directorio.resolve("turnos").toAbsolutePath().toString().replace('\\', '/'));
+                .run(argumentos());
     }
 
     @Test

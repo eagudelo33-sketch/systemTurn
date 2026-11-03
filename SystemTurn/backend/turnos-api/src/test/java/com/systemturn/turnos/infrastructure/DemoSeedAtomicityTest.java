@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * no seed rows remain, so the next startup can seed the whole queue again.
  */
 @SpringBootTest(properties = "turnos.test-context=demo-seed-atomicity")
-@ActiveProfiles({"test", "demo"})
+@ActiveProfiles({"dev", "demo", "test"})
 @Import(DemoSeedAtomicityTest.FailingRepositoryConfig.class)
 class DemoSeedAtomicityTest {
 

@@ -3,9 +3,11 @@ package com.systemturn.turnos.application;
 import com.systemturn.turnos.domain.Turno;
 import com.systemturn.turnos.domain.TurnoRepository;
 import com.systemturn.turnos.infrastructure.persistence.JpaTurnoRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.util.ArrayList;
@@ -28,10 +30,19 @@ class SolicitarConcurrencyTest {
     private static final int HILOS = 10;
 
     @Autowired
-    private TurnoService service;
+    TurnoService service;
 
     @Autowired
-    private TurnoRepository repository;
+    TurnoRepository repository;
+
+    @Autowired
+    JdbcTemplate jdbc;
+
+    /** The queue is scoped to today, so every test starts from an empty table (the PostgreSQL database is shared). */
+    @BeforeEach
+    void limpiar() {
+        jdbc.update("delete from turno");
+    }
 
     @Test
     void theServiceRunsOverTheJpaAdapter() {

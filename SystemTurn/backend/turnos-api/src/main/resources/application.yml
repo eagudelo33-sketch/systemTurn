@@ -1,14 +1,35 @@
 server:
   port: 8080
+  shutdown: graceful
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState
+        liveness:
+          include: livenessState
 spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 25s
   datasource:
-    url: jdbc:h2:file:${TURNOS_DB_PATH:./data/turnos}
+    hikari:
+      maximum-pool-size: ${TURNOS_DB_POOL_SIZE:10}
+      connection-timeout: 5000
   jpa:
     open-in-view: false
     hibernate:
       ddl-auto: validate
   flyway:
     enabled: true
+    connect-retries: ${TURNOS_DB_CONNECT_RETRIES:10}
 turnos:
   timezone: America/Bogota
   seed-file: classpath:turnos_hoy.csv

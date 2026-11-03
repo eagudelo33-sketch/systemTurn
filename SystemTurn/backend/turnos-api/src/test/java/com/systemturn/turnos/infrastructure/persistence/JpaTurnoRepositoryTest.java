@@ -33,23 +33,23 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class JpaTurnoRepositoryTest {
 
-    private static final LocalDate HOY = LocalDate.of(2026, 10, 29);
+    static final LocalDate HOY = LocalDate.of(2026, 10, 29);
 
     @Autowired
-    private JpaTurnoRepository repo;
+    JpaTurnoRepository repo;
 
     @Autowired
-    private TurnoJpaRepository jpa;
+    TurnoJpaRepository jpa;
 
     @Autowired
-    private JdbcTemplate jdbc;
+    JdbcTemplate jdbc;
 
     @BeforeEach
     void limpiar() {
         jpa.deleteAllInBatch();
     }
 
-    private Turno insertar(LocalDate fecha, int numero, LocalTime hora) {
+    Turno insertar(LocalDate fecha, int numero, LocalTime hora) {
         return repo.guardar(Turno.nuevo(fecha, numero, hora));
     }
 
