@@ -9,32 +9,52 @@ function formatTime(value) {
   return date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
 }
 
+async function cargarPanel() {
+  try {
+    return { data: await getDashboardData() }
+  } catch (requestError) {
+    return { message: requestError.message || 'No fue posible consultar los turnos.' }
+  }
+}
+
 function AsesorView() {
   const [turns, setTurns] = useState([])
   const [nextTurn, setNextTurn] = useState(null)
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState('')
+  const [conflicto, setConflicto] = useState(false)
   const [isCalling, setIsCalling] = useState(false)
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
 
+  const aplicarResultado = useCallback((resultado) => {
+    if (resultado.data) {
+      setTurns(resultado.data.turns)
+      setNextTurn(resultado.data.nextTurn)
+      setStatus('ready')
+      return true
+    }
+    setStatus('error')
+    setError(resultado.message)
+    return false
+  }, [])
+
   const refreshDashboard = useCallback(async () => {
     setStatus('loading')
     setError('')
-    try {
-      const data = await getDashboardData()
-      setTurns(data.turns)
-      setNextTurn(data.nextTurn)
-      setStatus('ready')
-    } catch (requestError) {
-      setStatus('error')
-      setError(requestError.message || 'No fue posible consultar los turnos.')
-    }
-  }, [])
+    setConflicto(false)
+    return aplicarResultado(await cargarPanel())
+  }, [aplicarResultado])
 
   useEffect(() => {
-    refreshDashboard()
-  }, [refreshDashboard])
+    let vigente = true
+    cargarPanel().then((resultado) => {
+      if (vigente) aplicarResultado(resultado)
+    })
+    return () => {
+      vigente = false
+    }
+  }, [aplicarResultado])
 
   const visibleTurns = useMemo(() => turns.filter((turn) => {
     const matchesFilter = filter === 'all' || turn.status === filter
@@ -50,8 +70,17 @@ function AsesorView() {
       await callNextTurn()
       await refreshDashboard()
     } catch (requestError) {
-      setError(requestError.message || 'No fue posible llamar al siguiente turno.')
-      setStatus('ready')
+      const mensaje = requestError.message || 'No fue posible llamar al siguiente turno.'
+      if (requestError.refreshable) {
+        // The refresh clears errors, so show the conflict message only after it succeeds.
+        if (await refreshDashboard()) {
+          setError(mensaje)
+          setConflicto(true)
+        }
+      } else {
+        setError(mensaje)
+        setStatus('ready')
+      }
     } finally {
       setIsCalling(false)
     }
@@ -88,7 +117,7 @@ function AsesorView() {
                 {isDemoMode ? 'Modo demostración' : 'Conectado al servidor'}
               </div>
             </section>
-            {error && <div className="alert" role="alert">{error}<button type="button" onClick={refreshDashboard}>Reintentar</button></div>}
+            {error && <div className="alert" role="alert">{error}{!conflicto && <button type="button" onClick={refreshDashboard}>Reintentar</button>}</div>}
             <section className="next-card" aria-labelledby="next-heading">
               <div className="next-copy">
                 <div className="section-kicker">GESTIÓN DE FILA</div>

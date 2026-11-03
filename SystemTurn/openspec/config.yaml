@@ -1,0 +1,64 @@
+schema: spec-driven
+
+context: |
+  Project: systemturn (virtual queue: clients get tickets like T-011, advisors call next).
+  Backend: Java 17, Spring Boot 4.1.2, Maven wrapper; hexagonal (domain/application/infrastructure/web); in-memory repo + CSV seed.
+  Frontend: React 19, Vite 8, ESLint 10 (JavaScript, no TypeScript, no test runner yet).
+  Testing: backend JUnit via spring-boot-starter-*-test; frontend lint/build only.
+  Docs baseline: SystemTurn/docs (01-current-state.md, 02-gaps-and-questions.md).
+
+strict_tdd: true
+
+delivery:
+  strategy: single-pr
+  review_budget_lines: 800
+
+testing:
+  strict_tdd: true
+  backend:
+    path: backend/turnos-api
+    runner: "./mvnw test"
+    framework: JUnit 5 (Spring Boot test)
+    layers:
+      unit: true        # TurnoServiceTest
+      integration: true # TurnoControllerTest (webmvc-test), TurnosApiApplicationTests
+      e2e: false
+    coverage: false     # no jacoco configured
+  frontend:
+    path: frontend/frontend-react/react-client
+    runner: none        # GAP: no test runner (e.g. Vitest + Testing Library) installed
+    lint: "npm run lint"
+    build: "npm run build"
+    coverage: false
+  quality:
+    linter: "npm run lint (frontend only)"
+    type_checker: none
+    formatter: none
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+    - Reference docs/02-gaps-and-questions.md decisions when relevant
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Respect hexagonal layering; domain MUST NOT depend on infrastructure/web
+    - Document architecture decisions with rationale
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+    - Forecast against the 800-line review budget (single-pr)
+  apply:
+    guidelines:
+      - Follow existing code patterns
+      - Backend work is test-first (RED-GREEN-REFACTOR) with JUnit
+      - Frontend TDD requires adding a test runner first (separate task)
+    tdd: true
+    test_command: "./mvnw test (from backend/turnos-api)"
+  verify:
+    test_command: "./mvnw test (from backend/turnos-api)"
+    build_command: "npm run build (from react-client); ./mvnw package (from backend/turnos-api)"
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas

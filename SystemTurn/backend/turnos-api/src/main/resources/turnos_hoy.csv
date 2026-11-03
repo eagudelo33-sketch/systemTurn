@@ -5,8 +5,8 @@ numero,hora_solicitud,hora_atencion,estado
 4,8:15,8:31,atendido
 5,8:21,8:40,atendido
 6,8:25,,pendiente
-9,8:41,,pendiente
 7,8:30,,cancelado
-7,8:34,,pendiente
-8,8:38,,pendiente
-10,8:45,,pendiente
+8,8:34,,pendiente
+9,8:38,,pendiente
+10,8:41,,pendiente
+11,8:45,,pendiente

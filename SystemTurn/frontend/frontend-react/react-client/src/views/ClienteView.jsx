@@ -35,7 +35,7 @@ function ClienteView() {
     }
   }, [turno?.numero, turno?.estado])
 
-  async function ejecutar(accion, siguientePhase) {
+  async function ejecutar(accion, siguientePhase, alConflicto) {
     if (ocupado.current) return
     ocupado.current = true
     setError('')
@@ -48,6 +48,13 @@ function ClienteView() {
       return data
     } catch (causa) {
       setError(causa instanceof Error ? causa.message : 'Ocurrió un error inesperado.')
+      if (causa?.refreshable && alConflicto) {
+        try {
+          setTurno(await alConflicto())
+        } catch {
+          // Keep the conflict message; the manual "Actualizar estado" button remains available.
+        }
+      }
       setPhase('idle')
       return null
     } finally {
@@ -65,7 +72,7 @@ function ClienteView() {
 
   function onCancelar() {
     if (!turno || turno.estado !== 'PENDIENTE' || phase !== 'idle') return
-    ejecutar(() => cancelarTurno(turno.id), 'cancelling').then((data) => {
+    ejecutar(() => cancelarTurno(turno.id), 'cancelling', () => consultarTurno(turno.id)).then((data) => {
       setConfirmarCancelacion(false)
       if (data) setAviso(`Turno ${formatearNumero(data.numero)} cancelado.`)
     })
