@@ -39,3 +39,14 @@ Cancelling a ticket not dated today MUST fail with 400 `OPERACION_INVALIDA`.
 - WHEN it is cancelled on 2026-10-30
 - THEN the response is 400 `OPERACION_INVALIDA` and the state is unchanged
 
+
+### Requirement: Stale ticket shows generic not-found
+When the client queries a ticket that is absent from today's dashboard (for example a ticket dated on a past day), the client view MUST show the generic message "No encontramos ese turno." No special "expired" message MUST be shown. A ticket surviving a page refresh is not claimed here; true stored-ticket behavior belongs to `client-identity`.
+
+#### Scenario: Browser holds a ticket missing from today's queue
+- GIVEN the client view holds a pending ticket in the current page session
+- AND the dashboard request is mocked to return today's queue without that ticket
+- WHEN the user clicks "Actualizar estado"
+- THEN an alert shows "No encontramos ese turno."
+- AND no message mentioning an expired or past-day ticket is shown
+- Proven by: Playwright test "Browser holds a ticket missing from today's queue" (mocked response)

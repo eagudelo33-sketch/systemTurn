@@ -41,7 +41,7 @@ frontend/frontend-react/react-client/src/services/turnosService.js
 - PostgreSQL (producción), Spring Data JPA y Flyway
 - H2 en archivo (solo desarrollo local, perfil `dev`)
 - Maven
-- Vitest (pruebas del frontend) y Testcontainers (pruebas del backend contra PostgreSQL)
+- Vitest (pruebas del frontend), Playwright (pruebas en el navegador) y Testcontainers (pruebas del backend contra PostgreSQL)
 
 ## Ejecutar el proyecto
 
@@ -138,6 +138,18 @@ Backend, desde `backend\turnos-api`:
 ```powershell
 .\mvnw.cmd test
 ```
+
+#### Pruebas en el navegador (Playwright)
+
+13 pruebas que recorren las vistas del cliente y del asesor en un Chromium real, contra el backend real (perfiles `dev,demo`, H2 en memoria) y Vite. El comando levanta y apaga ambos servidores; no necesita Docker ni credenciales de AWS. Los puertos **8080 y 5173 deben estar libres**. Desde `frontend\frontend-react\react-client`:
+
+```powershell
+npm run e2e:install    # solo la primera vez: descarga Chromium
+npm run e2e            # ejecuta las pruebas (sin ventana)
+npm run e2e:report     # abre el informe HTML (playwright-report/)
+```
+
+Las capturas de pantalla quedan en `test-results/`. Más detalle (variantes `e2e:headed` y `e2e:ui`, `E2E_REUSE=1` y cómo liberar los puertos si una ejecución se interrumpe): [`docs/app.md` → Browser E2E](docs/app.md#browser-e2e-playwright).
 
 Las pruebas del backend (147) incluyen un grupo que corre contra un PostgreSQL real con Testcontainers (clases `*PostgresTest`, imagen `postgres:17.10`). Ese grupo necesita Docker:
 

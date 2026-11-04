@@ -8,11 +8,17 @@ How specs change: a change writes *delta* specs under `openspec/changes/<change>
 
 | Capability | What it guarantees | Req | Scenarios | Main tests |
 |------------|--------------------|-----|-----------|------------|
-| [daily-queue](daily-queue/spec.md) | Queue scoped to today (`America/Bogota`), numbering restarts daily, past-day cancel rejected | 4 | 4 | `TurnoServiceTest` |
+| [daily-queue](daily-queue/spec.md) | Queue scoped to today (`America/Bogota`), numbering restarts daily, past-day cancel rejected | 5 | 5 | `TurnoServiceTest`, `e2e/03-respuestas-simuladas.spec.js` |
 | [ticket-persistence](ticket-persistence/spec.md) | Durable PostgreSQL storage, Flyway `V1` unchanged, domain isolated from persistence | 3 | 8 | `JpaTurnoRepository*Test`, `RestartSurvival*Test` |
-| [concurrency-conflicts](concurrency-conflicts/spec.md) | Unique daily numbers, optimistic locking, 409 `CONFLICTO`, engine-independent duplicate detection | 5 | 13 | `SolicitarConcurrency*Test`, `ConflictoHandlerTest`, `turnosService.test.js` |
+| [concurrency-conflicts](concurrency-conflicts/spec.md) | Unique daily numbers, optimistic locking, 409 `CONFLICTO`, engine-independent duplicate detection | 5 | 15 | `SolicitarConcurrency*Test`, `ConflictoHandlerTest`, `turnosService.test.js`, `e2e/03-respuestas-simuladas.spec.js` |
 | [demo-seed](demo-seed/spec.md) | CSV seed only under `demo` (+ `dev`), idempotent, atomic | 4 | 8 | `DemoSeedRunnerTest`, `DemoSeedAtomicityTest`, `StartupGuardTest` |
 | [runtime-operations](runtime-operations/spec.md) | Env-driven datasource, H2 guard, 503 `SERVICIO_NO_DISPONIBLE`, health probes without DB, graceful shutdown | 10 | 26 | `StartupGuardTest`, `HealthGroupsTest`, `GracefulShutdownTest`, `DatabaseDownFailFastTest` |
+
+## Quality
+
+| Capability | What it guarantees | Req | Scenarios | Main tests |
+|------------|--------------------|-----|-----------|------------|
+| [browser-e2e](browser-e2e/spec.md) | Playwright suite through a real browser, the Vite proxy and the real backend: client and advisor flows, mocked 503/409/stale-ticket views, fresh deterministic database, pinned toolchain | 12 | 29 | `e2e/01-cliente.spec.js`, `e2e/02-asesor.spec.js`, `e2e/03-respuestas-simuladas.spec.js` |
 
 ## Infrastructure (Terraform)
 
@@ -25,7 +31,7 @@ How specs change: a change writes *delta* specs under `openspec/changes/<change>
 | [infra-app](infra-app/spec.md) | ECR, RDS PostgreSQL 17 (RDS-managed secret), ECS Fargate (`desired_count` 0), ALB readiness check, least-privilege IAM, private SPA bucket behind CloudFront | 8 | 11 | `modules/app/tests/app.tftest.hcl` |
 | [infra-repo-conventions](infra-repo-conventions/spec.md) | Ignores, LF line endings, static gates, pre-commit, runbook | 7 | 18 | `infra/scripts/check-conventions.sh` |
 
-**Total: 63 requirements, 135 scenarios.**
+**Total: 76 requirements, 167 scenarios.**
 
 ## Change history (archive)
 
@@ -35,6 +41,7 @@ How specs change: a change writes *delta* specs under `openspec/changes/<change>
 | 2026-11-03 | [postgres-adapter](../changes/archive/2026-11-03-postgres-adapter/) | runtime-operations (new); ticket-persistence, demo-seed, concurrency-conflicts (modified) |
 | 2026-11-04 | [infra-foundation](../changes/archive/2026-11-04-infra-foundation/) | infra-state-backend, infra-cost-guardrails, infra-environments, infra-repo-conventions |
 | 2026-11-04 | [infra-network-app](../changes/archive/2026-11-04-infra-network-app/) | infra-network, infra-app (new); infra-environments, infra-cost-guardrails (modified) |
+| 2026-11-04 | [e2e-browser-tests](../changes/archive/2026-11-04-e2e-browser-tests/) | browser-e2e (new); concurrency-conflicts, daily-queue (modified: the 3 view scenarios deferred by `persistence-daily-queue` are now proven) |
 
 Each archived change holds its `proposal.md`, `design.md`, `tasks.md`, `verify-report.md` and `archive-report.md` (open obligations for later changes are listed there).
 
@@ -44,5 +51,6 @@ Each archived change holds its `proposal.md`, `design.md`, `tasks.md`, `verify-r
 |------|---------|
 | Backend (incl. PostgreSQL, needs Docker) | `cd backend/turnos-api && ./mvnw test -DrequireDocker=true` |
 | Frontend | `cd frontend/frontend-react/react-client && npm test` |
+| Browser E2E (needs Chromium, no Docker or AWS) | `cd frontend/frontend-react/react-client && npm run e2e` |
 | Terraform (no AWS credentials) | per root and module in `infra/` (`bootstrap`, `envs/*`, `modules/*`): `terraform init -backend=false && terraform test` |
 | Repo conventions | from repo root: `bash SystemTurn/infra/scripts/check-conventions.sh` |

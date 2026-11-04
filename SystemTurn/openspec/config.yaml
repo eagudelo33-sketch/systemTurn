@@ -3,8 +3,8 @@ schema: spec-driven
 context: |
   Project: systemturn (virtual queue: clients get tickets like T-011, advisors call next).
   Backend: Java 17, Spring Boot 4.1.2, Maven wrapper; hexagonal (domain/application/infrastructure/web); in-memory repo + CSV seed.
-  Frontend: React 19, Vite 8, ESLint 10 (JavaScript, no TypeScript, no test runner yet).
-  Testing: backend JUnit via spring-boot-starter-*-test; frontend lint/build only.
+  Frontend: React 19, Vite 8, ESLint 10 (JavaScript, no TypeScript, Vitest (unit) + Playwright (e2e)).
+  Testing: backend JUnit via spring-boot-starter-*-test; frontend Vitest (npm test), Playwright browser tests (npm run e2e), lint and build.
   Docs baseline: SystemTurn/docs (README.md = map, status, roadmap, decisions; app.md = application; infra-onboarding.md = AWS runbook).
 
 strict_tdd: true
@@ -26,7 +26,12 @@ testing:
     coverage: false     # no jacoco configured
   frontend:
     path: frontend/frontend-react/react-client
-    runner: none        # GAP: no test runner (e.g. Vitest + Testing Library) installed
+    runner: "npm test"  # Vitest 5, src/**/*.test.{js,jsx} (service layer; no component tests for the views)
+    e2e:
+      runner: "npm run e2e"   # Playwright Test 1.64.1, headless Chromium, e2e/*.spec.js (13 tests)
+      path: e2e/
+      install: "npm run e2e:install"   # first time only
+      note: "boots backend (dev,demo, in-memory H2) + Vite itself; ports 8080/5173 must be free"
     lint: "npm run lint"
     build: "npm run build"
     coverage: false
@@ -63,11 +68,11 @@ rules:
     guidelines:
       - Follow existing code patterns
       - Backend work is test-first (RED-GREEN-REFACTOR) with JUnit
-      - Frontend TDD requires adding a test runner first (separate task)
+      - Frontend work is test-first with Vitest (unit) or Playwright (browser, npm run e2e)
     tdd: true
-    test_command: "./mvnw test (from backend/turnos-api); infra: terraform test per root"
+    test_command: "./mvnw test (from backend/turnos-api); npm test and npm run e2e (from react-client); infra: terraform test per root"
   verify:
-    test_command: "./mvnw test (from backend/turnos-api); infra: terraform test per root + check-conventions.sh"
+    test_command: "./mvnw test (from backend/turnos-api); npm test and npm run e2e (from react-client); infra: terraform test per root + check-conventions.sh"
     build_command: "npm run build (from react-client); ./mvnw package (from backend/turnos-api); infra: terraform fmt -check, validate, tflint, trivy config"
     coverage_threshold: 0
   archive:

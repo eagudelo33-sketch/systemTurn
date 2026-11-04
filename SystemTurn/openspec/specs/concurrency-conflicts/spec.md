@@ -35,9 +35,7 @@ The error body MUST use the existing error shape with code `CONFLICTO`; other AP
 - THEN status is 409 and the code is `CONFLICTO`
 
 ### Requirement: Frontend conflict handling
-`turnosService.js` MUST map `CONFLICTO` to a friendly message flagged refreshable, so every view can react to it.
-
-> View-level reactions (advisor auto-reload, client re-fetch) are implemented but deferred to the `client-identity` change for their spec scenarios and component tests. See `deferred.md`.
+`turnosService.js` MUST map `CONFLICTO` to a friendly message flagged refreshable, so every view can react to it. The advisor view MUST reload the dashboard and show that message without a retry button. The client view MUST re-fetch the ticket and keep that message visible. The view-level scenarios are proven by Playwright tests that mock only the conflicting response (`browser-e2e`).
 
 #### Scenario: Service mapping
 - GIVEN the API returns 409 `CONFLICTO`
@@ -48,6 +46,24 @@ The error body MUST use the existing error shape with code `CONFLICTO`; other AP
 - GIVEN ticket 6 was attended and that change is already saved
 - WHEN the client cancels ticket 6
 - THEN the response is 400 `OPERACION_INVALIDA`, not 409
+
+#### Scenario: Advisor conflict reloads without retry
+- GIVEN the advisor view shows a next ticket
+- AND the "call next" request (`PATCH /api/v1/turnos/siguiente`) is mocked to return 409 `CONFLICTO`
+- WHEN the user clicks "Llamar al siguiente"
+- THEN an alert shows "El turno cambió mientras se procesaba. Actualiza e intenta de nuevo."
+- AND the dashboard is reloaded from the backend (a further dashboard request is made and the table is shown)
+- AND no "Reintentar" button is present
+- Proven by: Playwright test "Advisor conflict reloads without retry" (mocked response)
+
+#### Scenario: Client cancel conflict re-fetches
+- GIVEN the client holds a pending ticket and has confirmed with "Sí, cancelar"
+- AND the cancel request (`PATCH /api/v1/turnos/{id}/cancelar`) is mocked to return 409 `CONFLICTO`
+- WHEN the response arrives
+- THEN an alert shows "El turno cambió mientras se procesaba. Actualiza e intenta de nuevo."
+- AND the ticket is re-fetched from the dashboard and its current state is shown
+- AND the alert remains visible after the re-fetch
+- Proven by: Playwright test "Client cancel conflict re-fetches" (mocked response)
 
 ### Requirement: Engine-independent duplicate detection
 An insert violating the `(fecha, numero)` unique constraint MUST be translated to a duplicate-number outcome on every supported engine, comparing the constraint name case-insensitively (H2 reports `UK_TURNO_FECHA_NUMERO`, PostgreSQL `uk_turno_fecha_numero`). Other integrity violations MUST NOT be reported as duplicate numbers. Number assignment, the bounded retry, and 409 `CONFLICTO` behavior MUST be identical on H2 and PostgreSQL.

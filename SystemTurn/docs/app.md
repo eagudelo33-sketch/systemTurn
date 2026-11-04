@@ -155,6 +155,21 @@ Backend: **147 tests**, `./mvnw test`. The 17 PostgreSQL tests need Docker (see 
 | `RestartSurvivalPostgresTest` | 2 | **PostgreSQL.** Two contexts on one container: tickets 1-11 and their states survive |
 | **Backend total** | **147** | `./mvnw test` |
 | Frontend `turnosService.test.js` | 11 | Vitest. Response normalization, `CONFLICTO` and `SERVICIO_NO_DISPONIBLE` mapping. No component tests for the views |
+| Frontend `e2e/*.spec.js` | 13 | Playwright (Chromium). Both views in a real browser: 9 against the real backend, 4 with mocked responses. See [Browser E2E](#browser-e2e-playwright) |
+
+### Browser E2E (Playwright)
+
+13 tests in `frontend/frontend-react/react-client/e2e/`, run serially in headless Chromium. `npm run e2e` boots the backend (profiles `dev,demo`, in-memory H2) and the Vite dev server, runs the suite, and stops both. No Docker or AWS credentials are needed. Rules: [browser-e2e](../openspec/specs/browser-e2e/spec.md).
+
+| File | Tests | Backend | Covers |
+|------|-------|---------|--------|
+| `01-cliente.spec.js` | 4 | Real | Request a ticket (`T-012` on a fresh seed, position), cancel and keep, cancel and confirm, stats |
+| `02-asesor.spec.js` | 5 | Real | Dashboard load, search by number, filter by status, call next, switch between views |
+| `03-respuestas-simuladas.spec.js` | 4 | Mocked | Cancel conflict (409) re-fetches the ticket, advisor conflict reloads without `Reintentar`, a ticket missing from today's queue shows "No encontramos ese turno.", advisor 503 shows `Reintentar` and recovers |
+
+- **Expectations come from the live dashboard.** Position, next ticket and counts are read from `GET /api/v1/turnos/dashboard` in the same test (`e2e/support/api.js`), never hard-coded from the clock or the seed order. Times like `08:25 a. m.` are parsed AM/PM-aware.
+- **Mocked tests** use Playwright route interception for the cases the real backend cannot produce on demand (409, 503, a stale ticket).
+- **Evidence:** screenshots of the key steps go to `test-results/` (emptied at the start of each run); the HTML report goes to `playwright-report/`. Both folders are git-ignored.
 
 ### PostgreSQL test suite and `requireDocker`
 
@@ -172,7 +187,7 @@ The service tests use a fixed zoned `Clock`, so they are deterministic. Keep tha
 
 ## Tech versions
 
-Java 17 · Spring Boot 4.1.2 · PostgreSQL 17 (prod) · H2 (file, `dev` only) · Spring Data JPA · Flyway · Actuator · Testcontainers · Maven wrapper · React 19 · Vite 8 · Vitest · ESLint 10 · Terraform 1.16 (`~> 1.11`) · AWS provider 6.69.1 · tflint · trivy · pre-commit
+Java 17 · Spring Boot 4.1.2 · PostgreSQL 17 (prod) · H2 (file, `dev` only) · Spring Data JPA · Flyway · Actuator · Testcontainers · Maven wrapper · React 19 · Vite 8 · Vitest · Playwright 1.64.1 · ESLint 10 · Terraform 1.16 (`~> 1.11`) · AWS provider 6.69.1 · tflint · trivy · pre-commit
 
 ## Configuration and operations
 
@@ -242,6 +257,24 @@ cd frontend\frontend-react\react-client
 npm install
 npm run dev                    # http://localhost:5173
 npm test                       # Vitest (frontend)
+```
+
+Browser E2E (Playwright), from `frontend\frontend-react\react-client`. It starts its own backend and Vite, so **ports 8080 and 5173 must be free** (stop the terminals above first):
+
+```powershell
+npm run e2e:install            # first time only: downloads Chromium
+npm run e2e                    # headless, 13 tests
+npm run e2e:headed             # visible browser
+npm run e2e:ui                 # Playwright UI mode
+npm run e2e:report             # open the last HTML report (playwright-report/)
+```
+
+`$env:E2E_REUSE = "1"` reuses servers that are already running instead of failing on busy ports. Caveat: the tests assume the fresh demo seed (first new ticket is `T-012`), so a backend that already served requests, or one without `demo`, makes them fail. Use it only against a freshly started `dev,demo` backend.
+
+If a run is hard-killed (the runner process is stopped without cleanup), the servers can stay alive. Free the ports:
+
+```powershell
+Get-NetTCPConnection -State Listen -LocalPort 8080,5173 | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
 ```
 
 Backend tests: `.\mvnw.cmd test` from `backend\turnos-api` (add `"-DrequireDocker=true"` to fail instead of skipping when Docker is missing).

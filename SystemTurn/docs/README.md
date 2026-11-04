@@ -12,7 +12,7 @@ This page is the map. Read it first; it points you to the one document or spec y
 | Data storage (PostgreSQL, H2 for dev) | [app.md → Architecture](app.md#architecture), [Domain model](app.md#domain-model) | [ticket-persistence](../openspec/specs/ticket-persistence/spec.md) | `.../infrastructure/persistence`, `db/migration` |
 | Demo data | [app.md → Business rules](app.md#business-rules) | [demo-seed](../openspec/specs/demo-seed/spec.md) | `.../infrastructure/DemoSeedRunner.java` |
 | Running in production: config, startup guards, health, 503, shutdown | [app.md → Configuration and operations](app.md#configuration-and-operations) | [runtime-operations](../openspec/specs/runtime-operations/spec.md) | `application.yml`, `StartupGuard.java` |
-| Client and advisor screens | [app.md → Frontend](app.md#frontend) | [concurrency-conflicts](../openspec/specs/concurrency-conflicts/spec.md) (service mapping) | `frontend/frontend-react/react-client/src` |
+| Client and advisor screens | [app.md → Frontend](app.md#frontend) | [concurrency-conflicts](../openspec/specs/concurrency-conflicts/spec.md) (service mapping, conflict reactions), [browser-e2e](../openspec/specs/browser-e2e/spec.md) | `frontend/frontend-react/react-client/src` |
 | AWS infrastructure (Terraform): what exists, cost, on/off switch | [infra.md](infra.md), [infra-onboarding.md](infra-onboarding.md) (runbook) | [infra-network](../openspec/specs/infra-network/spec.md), [infra-app](../openspec/specs/infra-app/spec.md), [infra-environments](../openspec/specs/infra-environments/spec.md), [infra-cost-guardrails](../openspec/specs/infra-cost-guardrails/spec.md), [infra-state-backend](../openspec/specs/infra-state-backend/spec.md), [infra-repo-conventions](../openspec/specs/infra-repo-conventions/spec.md) | `infra/` |
 
 All specs, with requirement counts and the tests that prove them: [specs index](../openspec/specs/README.md). Why something changed: [change archive](../openspec/changes/archive/). How to run it in Spanish: [../README.md](../README.md).
@@ -26,7 +26,7 @@ All specs, with requirement counts and the tests that prove them: [specs index](
 | Database | ✅ PostgreSQL in production, H2 file for local `dev`; data survives restarts |
 | Operations | ✅ Env-driven config, startup guards, health probes that ignore the DB, fast `503`, graceful shutdown |
 | Infrastructure | ✅ Terraform foundation, network module and app module (ECS, RDS, ALB, CloudFront), verified offline. `dev` applies the network only (~$0); the paid app layer is off behind `enable_app`. `prod` not wired yet. ⏳ First real `apply` is manual |
-| Frontend tests | ⚠️ Vitest for the service layer only (11); no component tests for the views |
+| Frontend tests | ✅ Vitest for the service layer (11) + Playwright browser tests (13) covering both views, including the conflict and stale-ticket scenarios and a mocked advisor 503 (not a full-stack 503). ⚠️ No component tests for the views |
 | Live updates | ❌ Manual refresh |
 | Client keeps their ticket after a refresh | ❌ Ticket lives only in React state |
 | Authentication | ❌ Anyone can call "next" or cancel any ticket |
@@ -38,12 +38,14 @@ All specs, with requirement counts and the tests that prove them: [specs index](
 | 1 | `persistence-daily-queue` | ✅ Done | Database, daily queue, numbering restart, 409 conflicts, demo seed |
 | 2 | `postgres-adapter` | ✅ Done | PostgreSQL in production, guards, health, 503, graceful shutdown |
 | 3 | `infra-foundation` | ✅ Done | Terraform state backend, budget, env roots, conventions |
-| 4-5 | `infra-network-app` | ✅ Done | VPC module (3 tiers, 2 AZs, `nat_mode`), app module (ECR, ECS Fargate, ALB, RDS PostgreSQL, S3 + CloudFront), wired into `dev` behind `enable_app`. `prod` wiring deferred |
-| 6 | `infra-cicd` | ⏭️ Next | GitHub Actions with OIDC, plan on PR, manual prod approval |
-| 7 | `client-identity` | Planned (can slot in earlier) | `GET /turnos/{id}`, ticket kept in the browser, ISO times and state codes, component tests |
-| 8 | `wait-estimate` | Planned | Per-ticket wait estimate |
-| 9 | `live-updates` | Planned | WebSocket push to both views |
-| 10 | `advisor-auth` | Planned | Login for advisors (required before a public deploy) |
+| 4 | `infra-network-app` | ✅ Done | VPC module (3 tiers, 2 AZs, `nat_mode`), app module (ECR, ECS Fargate, ALB, RDS PostgreSQL, S3 + CloudFront), wired into `dev` behind `enable_app`. `prod` wiring deferred |
+| 5 | `e2e-browser-tests` | ✅ Done | Playwright suite: 13 browser tests over both views, real backend + mocked error responses |
+| 6 | `ux-error-states` | ⏭️ Next | Honest error and stale states in the views: advisor 503 and stale ticket (found by the browser tests) |
+| 7 | `infra-cicd` | Planned | GitHub Actions with OIDC, plan on PR, manual prod approval |
+| 8 | `client-identity` | Planned (can slot in earlier) | `GET /turnos/{id}`, ticket kept in the browser, ISO times and state codes, component tests |
+| 9 | `wait-estimate` | Planned | Per-ticket wait estimate |
+| 10 | `live-updates` | Planned | WebSocket push to both views |
+| 11 | `advisor-auth` | Planned | Login for advisors (required before a public deploy) |
 
 ## Decisions already made
 
@@ -69,8 +71,12 @@ All specs, with requirement counts and the tests that prove them: [specs index](
 | No live updates (stats load once; views refresh only after their own action) | P1 | `live-updates` |
 | No authentication or roles | P1 before a public deploy | `advisor-auth` |
 | No per-ticket wait estimate | P2 | `wait-estimate` |
-| No component tests for the views; 3 view scenarios deferred from `persistence-daily-queue` | P2 | `client-identity` |
+| No component tests for the views (the 3 view scenarios deferred from `persistence-daily-queue` are now proven by the browser tests) | P3 | — |
 | API returns display text (`"08:25 a. m."`, `"Pendiente"`) that the frontend re-parses | P2 | `client-identity` |
+| Client position is wrong after a re-fetch: `posicionEnDashboard` ignores the AM/PM suffix, so the order breaks across noon (found while writing the browser tests) | P2 | `client-identity` (fixed by ISO times) |
+| Advisor 503 still shows "Conectado al servidor", "No hay turnos pendientes" and "0 registros": it claims an empty queue when the state is unknown (found in browser-test screenshots) | P2 | `ux-error-states` |
+| Stale ticket shows "No encontramos ese turno." while the card still shows the ticket as Pendiente with a position (found in browser-test screenshots) | P2 | `ux-error-states` |
+| Advisor greeting "Buenos días, asesor" is hardcoded regardless of the time of day (found in browser-test screenshots) | P3 | any change touching `AsesorView` |
 | Dead code: `turnosSimulation.js`, `isDemoMode` | P3 | any change touching the frontend |
 | No Postman collection or OpenAPI file for the API | P3 | — |
 | No pagination on the dashboard; single advisor, no desk number; no reports | P3 | — |
@@ -82,9 +88,9 @@ These come from the archive reports. Each one must be handled by the change that
 
 | Change | Must do |
 |--------|---------|
-| next infra change | Carried from `infra-network-app`: prove the region and `default_tags` on a real resource in `plan` (still proven only through outputs); bump the tflint AWS plugin to 0.50.0 (allowed from 2026-11-06); keep pool size × tasks < `max_connections` when raising `app_desired_count` (documented, not enforced); add tests for the `/api/*` behavior, SPA rewrite and ALB prefix-list rule; wire `prod` (`nat_mode = "per_az"`, deletion protection, final snapshot) |
-| `infra-cicd` | Run `./mvnw test -DrequireDocker=true`; a full-stack 503 test; keep the PostgreSQL suite sequential (one shared container); run `check-conventions.sh`, `terraform test` (fail on "0 passed"), tflint and trivy; never delete lock files before pre-commit |
-| `client-identity` | Spec and prove (component tests) the 3 deferred view scenarios: advisor conflict reload, client cancel conflict re-fetch, stale ticket "not found"; show the `503` message in the views |
+| next infra change | Carried from `infra-network-app`: prove the region and `default_tags` on a real resource in `plan` (still proven only through outputs); bump the tflint AWS plugin to 0.50.0 (allowed from 2026-11-06); keep pool size × tasks < `max_connections` when raising `app_desired_count` (documented, not enforced); add tests for the `/api/*` behavior, SPA rewrite and ALB prefix-list rule; wire `prod` (`nat_mode = "per_az"`, deletion protection, final snapshot); remove or scope the `no_app_files_touched` convention check (a change-scoped rule from `infra-foundation` encoded as a permanent check: it fails every branch that touches `frontend/` or `backend/`) via a MODIFIED delta on `infra-repo-conventions` |
+| `infra-cicd` | Run `./mvnw test -DrequireDocker=true`; a full-stack 503 test; keep the PostgreSQL suite sequential (one shared container); run `check-conventions.sh`, `terraform test` (fail on "0 passed"), tflint and trivy; never delete lock files before pre-commit; run `npm run e2e` on Linux (`npx playwright install --with-deps chromium`; upload `playwright-report/` and `test-results/`) |
+| `client-identity` | Upgrade the stale-ticket browser test to a true stored-ticket test once persistence exists; fix the AM/PM position bug via ISO times; show the `503` message in the views |
 
 ## Docs, specs and archive
 
