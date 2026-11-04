@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Scope: account-level monthly cost budget in `SystemTurn/infra/bootstrap/`. The budget only notifies; it takes no automated action (no AWS Budget Actions). No application, API, backend or frontend change occurs.
+Scope: account-level monthly cost budget in `SystemTurn/infra/bootstrap/`, and the cost defaults of the `dev` root (paid resources exist only when a variable turns them on). The budget only notifies; it takes no automated action (no AWS Budget Actions). No application, API, backend or frontend change occurs.
 
-Verification: all scenarios run offline via `terraform test` (`command = plan`, `mock_provider "aws"`) in `infra/bootstrap/tests/budget.tftest.hcl` (run-block names are scenario IDs), or via repo-file checks.
+Verification: all scenarios run offline via `terraform test` (`command = plan`, `mock_provider "aws"`) in `infra/bootstrap/tests/budget.tftest.hcl` and `infra/envs/dev/tests/env.tftest.hcl` (run-block names are scenario IDs), or via repo-file checks.
 
 ## Requirements
 
@@ -67,7 +67,19 @@ The bootstrap root MUST NOT declare any `aws_budgets_budget_action`. Committed f
 - THEN every email value ends with `@example.com`
 - AND it defines `alert_emails` and `state_bucket_name`
 
+### Requirement: Dev paid layer is a switch, off by default
+The `dev` root MUST expose `enable_app` (bool, default `false`). With default variables, `dev` MUST instantiate no app module (no RDS, ALB, ECS, ECR, CloudFront), MUST use `nat_mode = "none"` (no NAT gateway, no Elastic IP), and every app output MUST be `null`. The network (2 AZs x 3 tiers) MUST still be created. The switch MUST be a variable, not a stop or pause step, because AWS keeps billing an existing ALB hourly and restarts a stopped RDS instance after 7 days.
+
+#### Scenario: dev_default_creates_no_app
+- GIVEN the dev root planned with only `owner` set
+- WHEN `dev_default_creates_no_app` runs
+- THEN `var.enable_app` is `false` and `length(module.app) == 0`
+- AND `app_enabled` is `false` and `ecr_repository_url`, `cloudfront_domain_name`, `db_endpoint` are `null`
+- AND `nat_mode` is `none` and the network has no NAT gateway ids
+- AND the network outputs list 2 public, 2 private_app and 2 data subnets
+
 ## Operational notes (NOT scenarios; manual via runbook)
 
 - Runbook documents the manual action at 100%: run `terraform destroy` on `infra/envs/dev` (budget alerts do not stop spend).
 - Subscribers must confirm the AWS Budgets email; real alert delivery and Cost Explorer data lag (up to ~24h) cannot be verified offline.
+- Approximate monthly prices for the dev switch are in `docs/infra.md`; they are estimates, not tested values. Confirm the default dev apply bills about $0 in Cost Explorer.

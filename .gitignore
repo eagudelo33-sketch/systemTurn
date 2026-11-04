@@ -16,4 +16,6 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 SystemTurn/infra/**/backend.hcl
+# Modules are not roots: their lock files are local test artifacts.
+SystemTurn/infra/modules/**/.terraform.lock.hcl
 .terraformrc
