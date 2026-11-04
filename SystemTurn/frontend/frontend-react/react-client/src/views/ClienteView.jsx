@@ -4,6 +4,7 @@ import {
   consultarTurno,
   obtenerEstadisticas,
   solicitarTurno,
+  TURNO_NO_ENCONTRADO,
   usandoSimulacion,
 } from '../services/turnosService.js'
 import {
@@ -48,6 +49,11 @@ function ClienteView() {
       return data
     } catch (causa) {
       setError(causa instanceof Error ? causa.message : 'Ocurrió un error inesperado.')
+      if (causa?.code === TURNO_NO_ENCONTRADO) {
+        // The server reported the ticket absent; any other failure leaves its state unknown.
+        setTurno(null)
+        setConfirmarCancelacion(false)
+      }
       if (causa?.refreshable && alConflicto) {
         try {
           setTurno(await alConflicto())

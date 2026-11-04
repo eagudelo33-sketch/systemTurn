@@ -6,6 +6,8 @@ const ESTADOS = {
   Cancelado: 'CANCELADO',
 }
 
+export const TURNO_NO_ENCONTRADO = 'TURNO_NO_ENCONTRADO'
+
 const MENSAJE_CONFLICTO = 'El turno cambió mientras se procesaba. Actualiza e intenta de nuevo.'
 
 const MENSAJE_NO_DISPONIBLE = 'El servicio no está disponible en este momento. Intenta de nuevo en unos minutos.'
@@ -19,8 +21,6 @@ const ADVISOR_STATUS = {
 export function usandoSimulacion() {
   return false
 }
-
-export const isDemoMode = false
 
 async function request(path, options = {}) {
   let response
@@ -108,7 +108,11 @@ export async function cancelarTurno(id) {
 export async function consultarTurno(id) {
   const dash = await request('/api/v1/turnos/dashboard')
   const propio = (dash.turnos || []).find((turno) => turno.id === id)
-  if (!propio) throw new Error('No encontramos ese turno.')
+  if (!propio) {
+    const ausente = new Error('No encontramos ese turno.')
+    ausente.code = TURNO_NO_ENCONTRADO
+    throw ausente
+  }
   return normalizarTurno(propio, posicionEnDashboard(dash, id))
 }
 

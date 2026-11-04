@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { callNextTurn, cancelarTurno, solicitarTurno } from './turnosService.js'
+import {
+  TURNO_NO_ENCONTRADO,
+  callNextTurn,
+  cancelarTurno,
+  consultarTurno,
+  solicitarTurno,
+} from './turnosService.js'
 
 function stubFetchResponse(status, body) {
   const response = {
@@ -117,5 +123,47 @@ describe('CONFLICTO mapping', () => {
     const error = await cancelarTurno(1).catch((e) => e)
     expect(error.message).toBe('No se puede cancelar.')
     expect(error.refreshable).toBeUndefined()
+  })
+})
+
+describe('consultarTurno', () => {
+  const MENSAJE_503 = 'Servicio no disponible, intenta de nuevo en unos minutos.'
+  const dashboard = {
+    turnos: [{ id: 5, codigo: 'T-005', estado: 'Pendiente', horaSolicitud: '09:00' }],
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('consultarTurno rejects with the not-found code', async () => {
+    stubFetchResponse(200, dashboard)
+
+    await expect(consultarTurno(99)).rejects.toMatchObject({
+      message: 'No encontramos ese turno.',
+      code: TURNO_NO_ENCONTRADO,
+    })
+    expect(TURNO_NO_ENCONTRADO).toBe('TURNO_NO_ENCONTRADO')
+  })
+
+  it('consultarTurno resolves a present ticket', async () => {
+    stubFetchResponse(200, dashboard)
+
+    await expect(consultarTurno(5)).resolves.toMatchObject({
+      id: 5,
+      numero: 'T-005',
+      estado: 'PENDIENTE',
+      posicionEnFila: 1,
+    })
+  })
+
+  it('503 is not converted to the not-found code', async () => {
+    stubFetchResponse(503, { error: 'SERVICIO_NO_DISPONIBLE', mensaje: MENSAJE_503 })
+
+    const error = await consultarTurno(5).catch((e) => e)
+
+    expect(error.message).toBe(MENSAJE_503)
+    expect(error.code).toBe('SERVICIO_NO_DISPONIBLE')
+    expect(error.code).not.toBe(TURNO_NO_ENCONTRADO)
   })
 })
