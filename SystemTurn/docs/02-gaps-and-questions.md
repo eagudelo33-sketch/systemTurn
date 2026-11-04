@@ -67,7 +67,9 @@ Each one is small enough to spec, build, and verify in one cycle.
 
 **Status:** `postgres-adapter` is done and archived (2026-11-03, `openspec/changes/archive/2026-11-03-postgres-adapter/`). Its operational obligations are in section 6.
 
-**Next change:** `infra-foundation`.
+**Status:** `infra-foundation` is done and archived (2026-11-04, `openspec/changes/archive/2026-11-04-infra-foundation/`): Terraform state backend, budget, dev/prod roots. First real `apply` is a manual step — see `docs/infra-onboarding.md`.
+
+**Next change:** `infra-network` (then `infra-app`, `infra-cicd`; `client-identity` can slot in between).
 
 ## 6. Operational notes (PostgreSQL)
 

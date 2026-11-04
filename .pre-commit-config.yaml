@@ -1,0 +1,44 @@
+# Install: python -m pip install pre-commit && pre-commit install --hook-type pre-commit --hook-type pre-push
+# Revs are the newest tags at least 14 days old when pinned (2026-11-03).
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0 # 2025-08-09
+    hooks:
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: detect-aws-credentials
+        args: [--allow-missing-credentials]
+
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.109.3 # 2026-10-20 (v1.109.4 of 2026-10-30 is <14 days old)
+    hooks:
+      - id: terraform_fmt
+        files: ^SystemTurn/infra/
+      - id: terraform_validate
+        files: ^SystemTurn/infra/
+        args: [--hook-config=--retry-once-with-cleanup=true]
+      - id: terraform_tflint
+        files: ^SystemTurn/infra/
+        args:
+          - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
+      - id: terraform_trivy
+        files: ^SystemTurn/infra/
+        args:
+          - --args=--config=__GIT_WORKING_DIR__/trivy.yaml
+          - --args=--ignorefile=__GIT_WORKING_DIR__/.trivyignore
+
+  - repo: local
+    hooks:
+      - id: check-conventions
+        name: infra repo conventions
+        entry: bash SystemTurn/infra/scripts/check-conventions.sh
+        language: system
+        pass_filenames: false
+        files: ^(SystemTurn/infra/|SystemTurn/docs/infra-|\.gitignore|\.gitattributes|\.pre-commit-config\.yaml|\.tflint\.hcl|trivy\.yaml)
+      - id: terraform-test
+        name: terraform test (offline, mocked provider)
+        entry: bash -c 'for r in bootstrap envs/dev envs/prod; do (cd "SystemTurn/infra/$r" && terraform init -backend=false -input=false -no-color >/dev/null && terraform test) || exit 1; done'
+        language: system
+        pass_filenames: false
+        files: ^SystemTurn/infra/
+        stages: [pre-push]

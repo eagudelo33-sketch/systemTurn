@@ -30,6 +30,16 @@ testing:
     lint: "npm run lint"
     build: "npm run build"
     coverage: false
+  infra:
+    path: infra
+    runner: "terraform test (per root: bootstrap, envs/dev, envs/prod; mock_provider, no AWS credentials)"
+    static_gates:
+      - "terraform fmt -check -recursive"
+      - "terraform validate (after init -backend=false)"
+      - "tflint --config=.tflint.hcl --chdir=<root>"
+      - "trivy config --config trivy.yaml SystemTurn/infra"
+    check_script: "bash SystemTurn/infra/scripts/check-conventions.sh"
+    coverage: false
   quality:
     linter: "npm run lint (frontend only)"
     type_checker: none
@@ -55,10 +65,10 @@ rules:
       - Backend work is test-first (RED-GREEN-REFACTOR) with JUnit
       - Frontend TDD requires adding a test runner first (separate task)
     tdd: true
-    test_command: "./mvnw test (from backend/turnos-api)"
+    test_command: "./mvnw test (from backend/turnos-api); infra: terraform test per root"
   verify:
-    test_command: "./mvnw test (from backend/turnos-api)"
-    build_command: "npm run build (from react-client); ./mvnw package (from backend/turnos-api)"
+    test_command: "./mvnw test (from backend/turnos-api); infra: terraform test per root + check-conventions.sh"
+    build_command: "npm run build (from react-client); ./mvnw package (from backend/turnos-api); infra: terraform fmt -check, validate, tflint, trivy config"
     coverage_threshold: 0
   archive:
     - Warn before merging destructive deltas
