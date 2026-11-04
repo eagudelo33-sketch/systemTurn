@@ -26,7 +26,7 @@ All specs, with requirement counts and the tests that prove them: [specs index](
 | Database | ✅ PostgreSQL in production, H2 file for local `dev`; data survives restarts |
 | Operations | ✅ Env-driven config, startup guards, health probes that ignore the DB, fast `503`, graceful shutdown |
 | Infrastructure | ✅ Terraform foundation (state bucket, budget, `dev`/`prod` roots), verified offline. ⏳ First real `apply` is manual |
-| Frontend tests | ✅ Vitest for the service layer (11) + Playwright browser tests (13) covering both views, including the conflict and stale-ticket scenarios and a mocked advisor 503 (not a full-stack 503). ⚠️ No component tests for the views |
+| Frontend tests | ✅ Vitest (19: service layer + advisor panel states) + Playwright browser tests (18) covering both views, including conflict, stale-ticket, loading, empty-queue and refresh-failure states and a mocked advisor 503 (not a full-stack 503). ⚠️ No component tests for the views |
 | Live updates | ❌ Manual refresh |
 | Client keeps their ticket after a refresh | ❌ Ticket lives only in React state |
 | Authentication | ❌ Anyone can call "next" or cancel any ticket |
@@ -39,8 +39,8 @@ All specs, with requirement counts and the tests that prove them: [specs index](
 | 2 | `postgres-adapter` | ✅ Done | PostgreSQL in production, guards, health, 503, graceful shutdown |
 | 3 | `infra-foundation` | ✅ Done | Terraform state backend, budget, env roots, conventions |
 | 4 | `e2e-browser-tests` | ✅ Done | Playwright suite: 13 browser tests over both views, real backend + mocked error responses |
-| 5 | `ux-error-states` | ⏭️ Next (before `infra-network`) | Honest error and stale states in the views: advisor 503 and stale ticket (found by the browser tests) |
-| 6 | `infra-network` | Planned | VPC module (3 tiers, 2 AZs, `nat_mode`), wired into `dev`/`prod` |
+| 5 | `ux-error-states` | ✅ Done | Honest error and stale states: the advisor never shows an unknown state as connected or empty; a ticket the server no longer has is cleared |
+| 6 | `infra-network` | ⏭️ Next | VPC module (3 tiers, 2 AZs, `nat_mode`), wired into `dev`/`prod` |
 | 7 | `infra-app` | Planned | ECR, ECS Fargate, ALB, RDS PostgreSQL, S3 + CloudFront |
 | 8 | `infra-cicd` | Planned | GitHub Actions with OIDC, plan on PR, manual prod approval |
 | 9 | `client-identity` | Planned (can slot in earlier) | `GET /turnos/{id}`, ticket kept in the browser, ISO times and state codes, component tests |
@@ -74,10 +74,8 @@ All specs, with requirement counts and the tests that prove them: [specs index](
 | No component tests for the views (the 3 view scenarios deferred from `persistence-daily-queue` are now proven by the browser tests) | P3 | — |
 | API returns display text (`"08:25 a. m."`, `"Pendiente"`) that the frontend re-parses | P2 | `client-identity` |
 | Client position is wrong after a re-fetch: `posicionEnDashboard` ignores the AM/PM suffix, so the order breaks across noon (found while writing the browser tests) | P2 | `client-identity` (fixed by ISO times) |
-| Advisor 503 still shows "Conectado al servidor", "No hay turnos pendientes" and "0 registros": it claims an empty queue when the state is unknown (found in browser-test screenshots) | P2 | `ux-error-states` |
-| Stale ticket shows "No encontramos ese turno." while the card still shows the ticket as Pendiente with a position (found in browser-test screenshots) | P2 | `ux-error-states` |
 | Advisor greeting "Buenos días, asesor" is hardcoded regardless of the time of day (found in browser-test screenshots) | P3 | any change touching `AsesorView` |
-| Dead code: `turnosSimulation.js`, `isDemoMode` | P3 | any change touching the frontend |
+| Dead code: `turnosSimulation.js` | P3 | any change touching the frontend |
 | No Postman collection or OpenAPI file for the API | P3 | — |
 | No pagination on the dashboard; single advisor, no desk number; no reports | P3 | — |
 
