@@ -12,7 +12,7 @@ This page is the map. Read it first; it points you to the one document or spec y
 | Data storage (PostgreSQL, H2 for dev) | [app.md → Architecture](app.md#architecture), [Domain model](app.md#domain-model) | [ticket-persistence](../openspec/specs/ticket-persistence/spec.md) | `.../infrastructure/persistence`, `db/migration` |
 | Demo data | [app.md → Business rules](app.md#business-rules) | [demo-seed](../openspec/specs/demo-seed/spec.md) | `.../infrastructure/DemoSeedRunner.java` |
 | Running in production: config, startup guards, health, 503, shutdown | [app.md → Configuration and operations](app.md#configuration-and-operations) | [runtime-operations](../openspec/specs/runtime-operations/spec.md) | `application.yml`, `StartupGuard.java` |
-| Client and advisor screens | [app.md → Frontend](app.md#frontend) | [concurrency-conflicts](../openspec/specs/concurrency-conflicts/spec.md) (service mapping) | `frontend/frontend-react/react-client/src` |
+| Client and advisor screens | [app.md → Frontend](app.md#frontend) | [concurrency-conflicts](../openspec/specs/concurrency-conflicts/spec.md) (service mapping, conflict reactions), [browser-e2e](../openspec/specs/browser-e2e/spec.md) | `frontend/frontend-react/react-client/src` |
 | AWS infrastructure (Terraform) | [infra-onboarding.md](infra-onboarding.md) | [infra-state-backend](../openspec/specs/infra-state-backend/spec.md), [infra-cost-guardrails](../openspec/specs/infra-cost-guardrails/spec.md), [infra-environments](../openspec/specs/infra-environments/spec.md), [infra-repo-conventions](../openspec/specs/infra-repo-conventions/spec.md) | `infra/` |
 
 All specs, with requirement counts and the tests that prove them: [specs index](../openspec/specs/README.md). Why something changed: [change archive](../openspec/changes/archive/). How to run it in Spanish: [../README.md](../README.md).
@@ -26,7 +26,7 @@ All specs, with requirement counts and the tests that prove them: [specs index](
 | Database | ✅ PostgreSQL in production, H2 file for local `dev`; data survives restarts |
 | Operations | ✅ Env-driven config, startup guards, health probes that ignore the DB, fast `503`, graceful shutdown |
 | Infrastructure | ✅ Terraform foundation (state bucket, budget, `dev`/`prod` roots), verified offline. ⏳ First real `apply` is manual |
-| Frontend tests | ✅ Vitest for the service layer (11) + Playwright browser tests (13) covering both views, including the conflict, stale-ticket and 503 scenarios. ⚠️ No component tests for the views |
+| Frontend tests | ✅ Vitest for the service layer (11) + Playwright browser tests (13) covering both views, including the conflict and stale-ticket scenarios and a mocked advisor 503 (not a full-stack 503). ⚠️ No component tests for the views |
 | Live updates | ❌ Manual refresh |
 | Client keeps their ticket after a refresh | ❌ Ticket lives only in React state |
 | Authentication | ❌ Anyone can call "next" or cancel any ticket |
@@ -38,7 +38,7 @@ All specs, with requirement counts and the tests that prove them: [specs index](
 | 1 | `persistence-daily-queue` | ✅ Done | Database, daily queue, numbering restart, 409 conflicts, demo seed |
 | 2 | `postgres-adapter` | ✅ Done | PostgreSQL in production, guards, health, 503, graceful shutdown |
 | 3 | `infra-foundation` | ✅ Done | Terraform state backend, budget, env roots, conventions |
-| 4 | `e2e-browser-tests` | ✅ Done (in review, archive pending) | Playwright suite: 13 browser tests over both views, real backend + mocked error responses |
+| 4 | `e2e-browser-tests` | ✅ Done | Playwright suite: 13 browser tests over both views, real backend + mocked error responses |
 | 5 | `ux-error-states` | ⏭️ Next (before `infra-network`) | Honest error and stale states in the views: advisor 503 and stale ticket (found by the browser tests) |
 | 6 | `infra-network` | Planned | VPC module (3 tiers, 2 AZs, `nat_mode`), wired into `dev`/`prod` |
 | 7 | `infra-app` | Planned | ECR, ECS Fargate, ALB, RDS PostgreSQL, S3 + CloudFront |
@@ -87,7 +87,7 @@ These come from the archive reports. Each one must be handled by the change that
 
 | Change | Must do |
 |--------|---------|
-| `infra-network` | Prove the region and `default_tags` on a real resource in `plan` (today proven only through an output); replace the `env_roots_declare_no_resources` scenario; bump the tflint AWS plugin to 0.50.0 (allowed from 2026-11-06) |
+| `infra-network` | Prove the region and `default_tags` on a real resource in `plan` (today proven only through an output); replace the `env_roots_declare_no_resources` scenario; bump the tflint AWS plugin to 0.50.0 (allowed from 2026-11-06); remove or scope the `no_app_files_touched` convention check (a change-scoped rule from `infra-foundation` encoded as a permanent check: it fails every branch that touches `frontend/` or `backend/`) via a MODIFIED delta on `infra-repo-conventions` |
 | `infra-app` | ALB health check `/actuator/health/readiness`; `socketTimeout` and `sslmode` in `SPRING_DATASOURCE_URL`; never run the `test` or `demo` profile in production; RDS PostgreSQL 17 (tests pin `postgres:17.10`); pool size × tasks < `max_connections`; ALB idle timeout long enough for WebSockets |
 | `infra-cicd` | Run `./mvnw test -DrequireDocker=true`; a full-stack 503 test; keep the PostgreSQL suite sequential (one shared container); run `check-conventions.sh`, `terraform test` (fail on "0 passed"), tflint and trivy; never delete lock files before pre-commit; run `npm run e2e` on Linux (`npx playwright install --with-deps chromium`; upload `playwright-report/` and `test-results/`) |
 | `client-identity` | Upgrade the stale-ticket browser test to a true stored-ticket test once persistence exists; fix the AM/PM position bug via ISO times; show the `503` message in the views |

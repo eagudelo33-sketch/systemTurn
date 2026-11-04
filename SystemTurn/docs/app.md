@@ -159,7 +159,7 @@ Backend: **147 tests**, `./mvnw test`. The 17 PostgreSQL tests need Docker (see 
 
 ### Browser E2E (Playwright)
 
-13 tests in `frontend/frontend-react/react-client/e2e/`, run serially in headless Chromium. `npm run e2e` boots the backend (profiles `dev,demo`, in-memory H2) and the Vite dev server, runs the suite, and stops both. No Docker or AWS credentials are needed. Rules: [browser-e2e](../openspec/changes/e2e-browser-tests/specs/browser-e2e/spec.md) (moves to `openspec/specs/` when the change is archived).
+13 tests in `frontend/frontend-react/react-client/e2e/`, run serially in headless Chromium. `npm run e2e` boots the backend (profiles `dev,demo`, in-memory H2) and the Vite dev server, runs the suite, and stops both. No Docker or AWS credentials are needed. Rules: [browser-e2e](../openspec/specs/browser-e2e/spec.md).
 
 | File | Tests | Backend | Covers |
 |------|-------|---------|--------|
