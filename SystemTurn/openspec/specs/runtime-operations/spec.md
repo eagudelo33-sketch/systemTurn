@@ -116,7 +116,7 @@ When a request needs the database and it is unreachable (connection acquisition 
 - THEN the 503 is returned within the Hikari connection timeout plus 2 seconds
 
 ### Requirement: Frontend 503 handling
-`turnosService.js` MUST map an HTTP 503 response with `error` `SERVICIO_NO_DISPONIBLE` to a thrown error whose message is the body `mensaje`. View-level behavior is out of scope (deferred to `client-identity`).
+`turnosService.js` MUST map an HTTP 503 response with `error` `SERVICIO_NO_DISPONIBLE` to a thrown error whose message is the body `mensaje`. The advisor view's behavior on a 503 is specified in `browser-e2e` ("Mocked advisor service-unavailable recovery", "Honest advisor load states"). Client-view 503 handling remains out of scope here (deferred to `client-identity`); `browser-e2e` only guards that a refresh failure keeps the held ticket.
 
 #### Scenario: Service maps 503
 - GIVEN fetch is mocked to return status 503 with body `{"error":"SERVICIO_NO_DISPONIBLE","mensaje":"Servicio no disponible, intenta de nuevo en unos minutos."}`
