@@ -19,11 +19,13 @@ How specs change: a change writes *delta* specs under `openspec/changes/<change>
 | Capability | What it guarantees | Req | Scenarios | Main tests |
 |------------|--------------------|-----|-----------|------------|
 | [infra-state-backend](infra-state-backend/spec.md) | Hardened S3 state bucket, native locking, `prevent_destroy`, per-env backend keys | 6 | 13 | `bootstrap/tests/state_bucket.tftest.hcl` |
-| [infra-cost-guardrails](infra-cost-guardrails/spec.md) | Monthly cost budget with email alerts (notify only) | 4 | 9 | `bootstrap/tests/budget.tftest.hcl` |
-| [infra-environments](infra-environments/spec.md) | `dev` / `prod` roots: pinned versions, default tags, no credentials, partial backend | 5 | 12 | `envs/*/tests/env.tftest.hcl` |
+| [infra-cost-guardrails](infra-cost-guardrails/spec.md) | Monthly cost budget with email alerts (notify only); dev paid layer off by default (`enable_app`) | 5 | 10 | `bootstrap/tests/budget.tftest.hcl`, `envs/dev/tests/env.tftest.hcl` |
+| [infra-environments](infra-environments/spec.md) | `dev` / `prod` roots: pinned versions, default tags, no credentials, partial backend; `dev` wires network + gated app, `prod` still empty | 6 | 13 | `envs/*/tests/env.tftest.hcl` |
+| [infra-network](infra-network/spec.md) | VPC 2 AZs x 3 tiers, `nat_mode` none/single/per_az, isolated data tier, free S3 endpoint, optional interface endpoints | 5 | 11 | `modules/network/tests/network.tftest.hcl` |
+| [infra-app](infra-app/spec.md) | ECR, RDS PostgreSQL 17 (RDS-managed secret), ECS Fargate (`desired_count` 0), ALB readiness check, least-privilege IAM, private SPA bucket behind CloudFront | 8 | 11 | `modules/app/tests/app.tftest.hcl` |
 | [infra-repo-conventions](infra-repo-conventions/spec.md) | Ignores, LF line endings, static gates, pre-commit, runbook | 7 | 18 | `infra/scripts/check-conventions.sh` |
 
-**Total: 48 requirements, 111 scenarios.**
+**Total: 63 requirements, 135 scenarios.**
 
 ## Change history (archive)
 
@@ -32,6 +34,7 @@ How specs change: a change writes *delta* specs under `openspec/changes/<change>
 | 2026-11-03 | [persistence-daily-queue](../changes/archive/2026-11-03-persistence-daily-queue/) | daily-queue, ticket-persistence, concurrency-conflicts, demo-seed (3 view scenarios deferred to `client-identity`, see its `deferred.md`) |
 | 2026-11-03 | [postgres-adapter](../changes/archive/2026-11-03-postgres-adapter/) | runtime-operations (new); ticket-persistence, demo-seed, concurrency-conflicts (modified) |
 | 2026-11-04 | [infra-foundation](../changes/archive/2026-11-04-infra-foundation/) | infra-state-backend, infra-cost-guardrails, infra-environments, infra-repo-conventions |
+| 2026-11-04 | [infra-network-app](../changes/archive/2026-11-04-infra-network-app/) | infra-network, infra-app (new); infra-environments, infra-cost-guardrails (modified) |
 
 Each archived change holds its `proposal.md`, `design.md`, `tasks.md`, `verify-report.md` and `archive-report.md` (open obligations for later changes are listed there).
 
@@ -41,5 +44,5 @@ Each archived change holds its `proposal.md`, `design.md`, `tasks.md`, `verify-r
 |------|---------|
 | Backend (incl. PostgreSQL, needs Docker) | `cd backend/turnos-api && ./mvnw test -DrequireDocker=true` |
 | Frontend | `cd frontend/frontend-react/react-client && npm test` |
-| Terraform (no AWS credentials) | per root in `infra/`: `terraform init -backend=false && terraform test` |
+| Terraform (no AWS credentials) | per root and module in `infra/` (`bootstrap`, `envs/*`, `modules/*`): `terraform init -backend=false && terraform test` |
 | Repo conventions | from repo root: `bash SystemTurn/infra/scripts/check-conventions.sh` |

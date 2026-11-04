@@ -13,7 +13,7 @@ This page is the map. Read it first; it points you to the one document or spec y
 | Demo data | [app.md → Business rules](app.md#business-rules) | [demo-seed](../openspec/specs/demo-seed/spec.md) | `.../infrastructure/DemoSeedRunner.java` |
 | Running in production: config, startup guards, health, 503, shutdown | [app.md → Configuration and operations](app.md#configuration-and-operations) | [runtime-operations](../openspec/specs/runtime-operations/spec.md) | `application.yml`, `StartupGuard.java` |
 | Client and advisor screens | [app.md → Frontend](app.md#frontend) | [concurrency-conflicts](../openspec/specs/concurrency-conflicts/spec.md) (service mapping) | `frontend/frontend-react/react-client/src` |
-| AWS infrastructure (Terraform) | [infra-onboarding.md](infra-onboarding.md) | [infra-state-backend](../openspec/specs/infra-state-backend/spec.md), [infra-cost-guardrails](../openspec/specs/infra-cost-guardrails/spec.md), [infra-environments](../openspec/specs/infra-environments/spec.md), [infra-repo-conventions](../openspec/specs/infra-repo-conventions/spec.md) | `infra/` |
+| AWS infrastructure (Terraform): what exists, cost, on/off switch | [infra.md](infra.md), [infra-onboarding.md](infra-onboarding.md) (runbook) | [infra-network](../openspec/specs/infra-network/spec.md), [infra-app](../openspec/specs/infra-app/spec.md), [infra-environments](../openspec/specs/infra-environments/spec.md), [infra-cost-guardrails](../openspec/specs/infra-cost-guardrails/spec.md), [infra-state-backend](../openspec/specs/infra-state-backend/spec.md), [infra-repo-conventions](../openspec/specs/infra-repo-conventions/spec.md) | `infra/` |
 
 All specs, with requirement counts and the tests that prove them: [specs index](../openspec/specs/README.md). Why something changed: [change archive](../openspec/changes/archive/). How to run it in Spanish: [../README.md](../README.md).
 
@@ -25,7 +25,7 @@ All specs, with requirement counts and the tests that prove them: [specs index](
 | Advisor and client views | ✅ Working against the real API |
 | Database | ✅ PostgreSQL in production, H2 file for local `dev`; data survives restarts |
 | Operations | ✅ Env-driven config, startup guards, health probes that ignore the DB, fast `503`, graceful shutdown |
-| Infrastructure | ✅ Terraform foundation (state bucket, budget, `dev`/`prod` roots), verified offline. ⏳ First real `apply` is manual |
+| Infrastructure | ✅ Terraform foundation, network module and app module (ECS, RDS, ALB, CloudFront), verified offline. `dev` applies the network only (~$0); the paid app layer is off behind `enable_app`. `prod` not wired yet. ⏳ First real `apply` is manual |
 | Frontend tests | ⚠️ Vitest for the service layer only (11); no component tests for the views |
 | Live updates | ❌ Manual refresh |
 | Client keeps their ticket after a refresh | ❌ Ticket lives only in React state |
@@ -38,9 +38,8 @@ All specs, with requirement counts and the tests that prove them: [specs index](
 | 1 | `persistence-daily-queue` | ✅ Done | Database, daily queue, numbering restart, 409 conflicts, demo seed |
 | 2 | `postgres-adapter` | ✅ Done | PostgreSQL in production, guards, health, 503, graceful shutdown |
 | 3 | `infra-foundation` | ✅ Done | Terraform state backend, budget, env roots, conventions |
-| 4 | `infra-network` | ⏭️ Next | VPC module (3 tiers, 2 AZs, `nat_mode`), wired into `dev`/`prod` |
-| 5 | `infra-app` | Planned | ECR, ECS Fargate, ALB, RDS PostgreSQL, S3 + CloudFront |
-| 6 | `infra-cicd` | Planned | GitHub Actions with OIDC, plan on PR, manual prod approval |
+| 4-5 | `infra-network-app` | ✅ Done | VPC module (3 tiers, 2 AZs, `nat_mode`), app module (ECR, ECS Fargate, ALB, RDS PostgreSQL, S3 + CloudFront), wired into `dev` behind `enable_app`. `prod` wiring deferred |
+| 6 | `infra-cicd` | ⏭️ Next | GitHub Actions with OIDC, plan on PR, manual prod approval |
 | 7 | `client-identity` | Planned (can slot in earlier) | `GET /turnos/{id}`, ticket kept in the browser, ISO times and state codes, component tests |
 | 8 | `wait-estimate` | Planned | Per-ticket wait estimate |
 | 9 | `live-updates` | Planned | WebSocket push to both views |
@@ -58,7 +57,8 @@ All specs, with requirement counts and the tests that prove them: [specs index](
 | Live updates | WebSockets |
 | Wait estimate | Position × average time between consecutive attentions today; a configurable default per person when nobody has been served yet; capped at 120 minutes |
 | Health checks | The database is excluded from readiness/liveness, so an RDS failover does not make ECS replace tasks; DB-dependent requests answer `503` |
-| Infrastructure layout | One Terraform root per environment (no workspaces); `bootstrap/` separate; account ID kept out of the repo |
+| Infrastructure layout | One Terraform root per environment (no workspaces); `bootstrap/` separate; reusable `modules/network` and `modules/app`; account ID kept out of the repo |
+| Dev cost | Paid layer is a switch (`enable_app`, default off), not a pause: an ALB bills while it exists and a stopped RDS restarts after 7 days. `nat_mode = "none"` in dev, `single` when the app is on, `per_az` for prod. See [infra.md](infra.md) |
 | Frontend ↔ backend | Every API contract change ships with the matching frontend change |
 
 ## Open gaps
@@ -74,6 +74,7 @@ All specs, with requirement counts and the tests that prove them: [specs index](
 | Dead code: `turnosSimulation.js`, `isDemoMode` | P3 | any change touching the frontend |
 | No Postman collection or OpenAPI file for the API | P3 | — |
 | No pagination on the dashboard; single advisor, no desk number; no reports | P3 | — |
+| AWS edge: ALB is HTTP only (no ACM), no WAF, no CloudFront-to-ALB secret header, no WebSocket path; `prod` not wired; nothing applied to a real account | P1 before a public deploy | `infra-cicd`, `live-updates`, a prod wiring change |
 
 ## Obligations carried into upcoming changes
 
@@ -81,8 +82,7 @@ These come from the archive reports. Each one must be handled by the change that
 
 | Change | Must do |
 |--------|---------|
-| `infra-network` | Prove the region and `default_tags` on a real resource in `plan` (today proven only through an output); replace the `env_roots_declare_no_resources` scenario; bump the tflint AWS plugin to 0.50.0 (allowed from 2026-11-06) |
-| `infra-app` | ALB health check `/actuator/health/readiness`; `socketTimeout` and `sslmode` in `SPRING_DATASOURCE_URL`; never run the `test` or `demo` profile in production; RDS PostgreSQL 17 (tests pin `postgres:17.10`); pool size × tasks < `max_connections`; ALB idle timeout long enough for WebSockets |
+| next infra change | Carried from `infra-network-app`: prove the region and `default_tags` on a real resource in `plan` (still proven only through outputs); bump the tflint AWS plugin to 0.50.0 (allowed from 2026-11-06); keep pool size × tasks < `max_connections` when raising `app_desired_count` (documented, not enforced); add tests for the `/api/*` behavior, SPA rewrite and ALB prefix-list rule; wire `prod` (`nat_mode = "per_az"`, deletion protection, final snapshot) |
 | `infra-cicd` | Run `./mvnw test -DrequireDocker=true`; a full-stack 503 test; keep the PostgreSQL suite sequential (one shared container); run `check-conventions.sh`, `terraform test` (fail on "0 passed"), tflint and trivy; never delete lock files before pre-commit |
 | `client-identity` | Spec and prove (component tests) the 3 deferred view scenarios: advisor conflict reload, client cancel conflict re-fetch, stale ticket "not found"; show the `503` message in the views |
 
