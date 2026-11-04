@@ -1,10 +1,12 @@
-# Delta for infra-repo-conventions (NEW)
+# Infra Repo Conventions Specification
 
-Scope: repo-level ignore/EOL rules, static-analysis configuration, pre-commit hooks, test-runner config, and the onboarding runbook. No application, API, backend (`backend/turnos-api`) or frontend (`react-client`) change occurs.
+## Purpose
+
+Scope: repo-level ignore/EOL rules, static-analysis configuration, pre-commit hooks, test-runner config, and the onboarding runbook. No application, API, backend (`backend/turnos-api`) or frontend (`frontend/frontend-react/react-client`) change occurs.
 
 Verification: all scenarios are repo-file checks (`infra/scripts/check-conventions.sh`, a script run with no AWS account, using `git check-ignore`, `git ls-files` and file parsing) or static gates (`terraform fmt -check -recursive`, `terraform validate`, tflint, trivy config).
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Ignore rules protect state and secrets
 Root `.gitignore` MUST ignore `.terraform/`, `*.tfstate`, `*.tfstate.*`, `*.tfplan`, `*.tfvars`, `backend.hcl` (real files), and MUST NOT ignore `*.tfvars.example`, `backend.hcl.example`, or `.terraform.lock.hcl`.

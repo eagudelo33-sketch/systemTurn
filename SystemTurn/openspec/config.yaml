@@ -5,7 +5,7 @@ context: |
   Backend: Java 17, Spring Boot 4.1.2, Maven wrapper; hexagonal (domain/application/infrastructure/web); in-memory repo + CSV seed.
   Frontend: React 19, Vite 8, ESLint 10 (JavaScript, no TypeScript, no test runner yet).
   Testing: backend JUnit via spring-boot-starter-*-test; frontend lint/build only.
-  Docs baseline: SystemTurn/docs (01-current-state.md, 02-gaps-and-questions.md).
+  Docs baseline: SystemTurn/docs (README.md = map, status, roadmap, decisions; app.md = application; infra-onboarding.md = AWS runbook).
 
 strict_tdd: true
 
@@ -48,7 +48,7 @@ testing:
 rules:
   proposal:
     - Include rollback plan for risky changes
-    - Reference docs/02-gaps-and-questions.md decisions when relevant
+    - Reference the decisions and open gaps in docs/README.md when relevant
   specs:
     - Use Given/When/Then for scenarios
     - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)

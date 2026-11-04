@@ -7,7 +7,6 @@ Tickets are durable across backend restarts.
 
 ### Requirement: Durable storage
 The system MUST store every ticket in the PostgreSQL database configured by `SPRING_DATASOURCE_*`. H2 MAY be used only under profile `dev` (file) or `test`. The `data/` directory MUST remain git-ignored. Every state mutation MUST be persisted. Existing H2 file data MUST NOT be migrated.
-(Previously: file-based database at `TURNOS_DB_PATH`, default `./data/turnos`.)
 
 #### Scenario: Restart survival
 - GIVEN tickets 1-11 exist for 2026-10-29 and 1 is ATENDIDO

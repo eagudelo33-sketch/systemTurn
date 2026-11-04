@@ -1,10 +1,12 @@
-# Delta for infra-environments (NEW)
+# Infra Environments Specification
+
+## Purpose
 
 Scope: `SystemTurn/infra/envs/dev/` and `SystemTurn/infra/envs/prod/` skeletons. No resources are declared. `prod` is plan-only until `infra-app`: this change defines no requirement to apply it. No application, API, backend or frontend change occurs.
 
 Verification: offline via `terraform test` (`command = plan`, `mock_provider "aws"`) in `infra/envs/<env>/tests/env.tftest.hcl` (run-block names are scenario IDs), `terraform validate`, `fmt -check`, and repo-file checks.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Independent env roots
 Each of `dev` and `prod` MUST be an independent Terraform root with its own `versions.tf`, `providers.tf`, `variables.tf`, `.terraform.lock.hcl` and tests. Each MUST validate with `terraform init -backend=false` followed by `terraform validate`.

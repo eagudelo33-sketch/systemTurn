@@ -1,10 +1,12 @@
-# Delta for infra-cost-guardrails (NEW)
+# Infra Cost Guardrails Specification
+
+## Purpose
 
 Scope: account-level monthly cost budget in `SystemTurn/infra/bootstrap/`. The budget only notifies; it takes no automated action (no AWS Budget Actions). No application, API, backend or frontend change occurs.
 
 Verification: all scenarios run offline via `terraform test` (`command = plan`, `mock_provider "aws"`) in `infra/bootstrap/tests/budget.tftest.hcl` (run-block names are scenario IDs), or via repo-file checks.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Monthly cost budget
 The bootstrap root MUST define one `aws_budgets_budget` with `budget_type = "COST"`, `time_unit = "MONTHLY"`, `limit_unit = "USD"`, and `limit_amount` taken from variable `budget_amount_usd` (type number, default `30`, validated `> 0`).
