@@ -2,14 +2,14 @@
 
 ## Purpose
 
-Scope: `SystemTurn/infra/envs/dev/` and `SystemTurn/infra/envs/prod/` skeletons. No resources are declared. `prod` is plan-only until `infra-app`: this change defines no requirement to apply it. No application, API, backend or frontend change occurs.
+Scope: `SystemTurn/infra/envs/dev/` and `SystemTurn/infra/envs/prod/` roots. `dev` composes `modules/network` and, behind `enable_app`, `modules/app` (see `infra-network`, `infra-app`, `infra-cost-guardrails`). `prod` is a plan-only skeleton with no resources until a later change wires it. No application, API, backend or frontend change occurs.
 
 Verification: offline via `terraform test` (`command = plan`, `mock_provider "aws"`) in `infra/envs/<env>/tests/env.tftest.hcl` (run-block names are scenario IDs), `terraform validate`, `fmt -check`, and repo-file checks.
 
 ## Requirements
 
 ### Requirement: Independent env roots
-Each of `dev` and `prod` MUST be an independent Terraform root with its own `versions.tf`, `providers.tf`, `variables.tf`, `.terraform.lock.hcl` and tests. Each MUST validate with `terraform init -backend=false` followed by `terraform validate`.
+Each of `dev` and `prod` MUST be an independent Terraform root with its own `versions.tf`, `providers.tf`, `variables.tf`, `.terraform.lock.hcl` and tests. Each MUST validate with `terraform init -backend=false` followed by `terraform validate`. `prod` MUST declare no resources until a change wires it.
 
 #### Scenario: env_roots_validate
 - GIVEN each env directory
@@ -17,9 +17,17 @@ Each of `dev` and `prod` MUST be an independent Terraform root with its own `ver
 - THEN both exit 0 for `dev` and for `prod`
 
 #### Scenario: env_roots_declare_no_resources
-- GIVEN each env root planned under `mock_provider "aws"`
-- WHEN `env_roots_declare_no_resources` runs
+- GIVEN the `prod` root planned under `mock_provider "aws"`
+- WHEN `env_roots_declare_no_resources` runs (in `envs/prod/tests/env.tftest.hcl` only)
 - THEN the plan contains zero resource changes
+
+### Requirement: Dev composes network and app modules
+The `dev` root MUST instantiate `modules/network` with `name = "systemturn-dev"` and variables `vpc_cidr` (default `10.20.0.0/16`), `nat_mode` (default `none`) and `enable_vpc_endpoints` (default `false`). It MUST instantiate `modules/app` with `count = var.enable_app ? 1 : 0`, wired to the network outputs and to `app_image_tag` and `app_desired_count`, with dev lifecycle settings (no deletion protection, skip final snapshot, 1-day backups, force-delete ECR and frontend bucket). App outputs MUST be exposed through `try(..., null)` so they are `null` while the app is off.
+
+#### Scenario: dev_enable_app_plans
+- GIVEN the dev root with `enable_app = true`
+- WHEN `dev_enable_app_plans` runs
+- THEN exactly one `module.app` instance is planned and `output.app_enabled` is `true`
 
 ### Requirement: Version pins and lock files
 Each env MUST require Terraform `~> 1.11` and provider `hashicorp/aws` `~> 6.69`. Each committed `.terraform.lock.hcl` MUST pin `aws` 6.69.1 and contain hashes for both `windows_amd64` and `linux_amd64` (an `h1:` hash plus `zh:` hashes sufficient for both platforms).
@@ -86,5 +94,7 @@ Each env MUST commit a `terraform.tfvars.example` (placeholders only, no real va
 
 ## Operational notes (NOT scenarios)
 
-- `prod` is plan-only until `infra-app`; nothing here requires applying it.
+- `prod` is plan-only until a later change wires the modules into it; nothing here requires applying it.
+- The dev default (`enable_app = false`, no NAT) is specified in `infra-cost-guardrails` (scenario `dev_default_creates_no_app`).
+- Region and `default_tags` are still asserted through outputs, not on a provider-backed resource attribute (open obligation).
 - Real `terraform init -backend-config=backend.hcl` against the S3 bucket, state migration, and real provider authentication via IAM Identity Center SSO are runbook steps requiring an AWS account.
