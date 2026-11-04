@@ -1,3 +1,13 @@
 # Copy to terraform.tfvars (gitignored) and adjust.
 region = "us-east-1"
 owner  = "systemturn"
+
+# Network (~$0 with these defaults; the S3 gateway endpoint is free).
+vpc_cidr             = "10.20.0.0/16"
+nat_mode             = "none" # none | single (~$33/month) | per_az (~$66/month)
+enable_vpc_endpoints = false  # true: ~$58/month (4 interface endpoints x 2 AZs)
+
+# Paid app layer: RDS, ALB, ECS, ECR, CloudFront. Keep false to stay at ~$0.
+enable_app        = false
+app_image_tag     = "initial"
+app_desired_count = 0 # tasks need nat_mode != "none" or enable_vpc_endpoints = true
