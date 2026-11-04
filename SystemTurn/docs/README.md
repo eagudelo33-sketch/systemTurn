@@ -26,7 +26,7 @@ All specs, with requirement counts and the tests that prove them: [specs index](
 | Database | ✅ PostgreSQL in production, H2 file for local `dev`; data survives restarts |
 | Operations | ✅ Env-driven config, startup guards, health probes that ignore the DB, fast `503`, graceful shutdown |
 | Infrastructure | ✅ Terraform foundation (state bucket, budget, `dev`/`prod` roots), verified offline. ⏳ First real `apply` is manual |
-| Frontend tests | ⚠️ Vitest for the service layer only (11); no component tests for the views |
+| Frontend tests | ✅ Vitest for the service layer (11) + Playwright browser tests (13) covering both views, including the conflict, stale-ticket and 503 scenarios. ⚠️ No component tests for the views |
 | Live updates | ❌ Manual refresh |
 | Client keeps their ticket after a refresh | ❌ Ticket lives only in React state |
 | Authentication | ❌ Anyone can call "next" or cancel any ticket |
@@ -38,13 +38,15 @@ All specs, with requirement counts and the tests that prove them: [specs index](
 | 1 | `persistence-daily-queue` | ✅ Done | Database, daily queue, numbering restart, 409 conflicts, demo seed |
 | 2 | `postgres-adapter` | ✅ Done | PostgreSQL in production, guards, health, 503, graceful shutdown |
 | 3 | `infra-foundation` | ✅ Done | Terraform state backend, budget, env roots, conventions |
-| 4 | `infra-network` | ⏭️ Next | VPC module (3 tiers, 2 AZs, `nat_mode`), wired into `dev`/`prod` |
-| 5 | `infra-app` | Planned | ECR, ECS Fargate, ALB, RDS PostgreSQL, S3 + CloudFront |
-| 6 | `infra-cicd` | Planned | GitHub Actions with OIDC, plan on PR, manual prod approval |
-| 7 | `client-identity` | Planned (can slot in earlier) | `GET /turnos/{id}`, ticket kept in the browser, ISO times and state codes, component tests |
-| 8 | `wait-estimate` | Planned | Per-ticket wait estimate |
-| 9 | `live-updates` | Planned | WebSocket push to both views |
-| 10 | `advisor-auth` | Planned | Login for advisors (required before a public deploy) |
+| 4 | `e2e-browser-tests` | ✅ Done (in review, archive pending) | Playwright suite: 13 browser tests over both views, real backend + mocked error responses |
+| 5 | `ux-error-states` | ⏭️ Next (before `infra-network`) | Honest error and stale states in the views: advisor 503 and stale ticket (found by the browser tests) |
+| 6 | `infra-network` | Planned | VPC module (3 tiers, 2 AZs, `nat_mode`), wired into `dev`/`prod` |
+| 7 | `infra-app` | Planned | ECR, ECS Fargate, ALB, RDS PostgreSQL, S3 + CloudFront |
+| 8 | `infra-cicd` | Planned | GitHub Actions with OIDC, plan on PR, manual prod approval |
+| 9 | `client-identity` | Planned (can slot in earlier) | `GET /turnos/{id}`, ticket kept in the browser, ISO times and state codes, component tests |
+| 10 | `wait-estimate` | Planned | Per-ticket wait estimate |
+| 11 | `live-updates` | Planned | WebSocket push to both views |
+| 12 | `advisor-auth` | Planned | Login for advisors (required before a public deploy) |
 
 ## Decisions already made
 
@@ -69,8 +71,12 @@ All specs, with requirement counts and the tests that prove them: [specs index](
 | No live updates (stats load once; views refresh only after their own action) | P1 | `live-updates` |
 | No authentication or roles | P1 before a public deploy | `advisor-auth` |
 | No per-ticket wait estimate | P2 | `wait-estimate` |
-| No component tests for the views; 3 view scenarios deferred from `persistence-daily-queue` | P2 | `client-identity` |
+| No component tests for the views (the 3 view scenarios deferred from `persistence-daily-queue` are now proven by the browser tests) | P3 | — |
 | API returns display text (`"08:25 a. m."`, `"Pendiente"`) that the frontend re-parses | P2 | `client-identity` |
+| Client position is wrong after a re-fetch: `posicionEnDashboard` ignores the AM/PM suffix, so the order breaks across noon (found while writing the browser tests) | P2 | `client-identity` (fixed by ISO times) |
+| Advisor 503 still shows "Conectado al servidor", "No hay turnos pendientes" and "0 registros": it claims an empty queue when the state is unknown (found in browser-test screenshots) | P2 | `ux-error-states` |
+| Stale ticket shows "No encontramos ese turno." while the card still shows the ticket as Pendiente with a position (found in browser-test screenshots) | P2 | `ux-error-states` |
+| Advisor greeting "Buenos días, asesor" is hardcoded regardless of the time of day (found in browser-test screenshots) | P3 | any change touching `AsesorView` |
 | Dead code: `turnosSimulation.js`, `isDemoMode` | P3 | any change touching the frontend |
 | No Postman collection or OpenAPI file for the API | P3 | — |
 | No pagination on the dashboard; single advisor, no desk number; no reports | P3 | — |
@@ -83,8 +89,8 @@ These come from the archive reports. Each one must be handled by the change that
 |--------|---------|
 | `infra-network` | Prove the region and `default_tags` on a real resource in `plan` (today proven only through an output); replace the `env_roots_declare_no_resources` scenario; bump the tflint AWS plugin to 0.50.0 (allowed from 2026-11-06) |
 | `infra-app` | ALB health check `/actuator/health/readiness`; `socketTimeout` and `sslmode` in `SPRING_DATASOURCE_URL`; never run the `test` or `demo` profile in production; RDS PostgreSQL 17 (tests pin `postgres:17.10`); pool size × tasks < `max_connections`; ALB idle timeout long enough for WebSockets |
-| `infra-cicd` | Run `./mvnw test -DrequireDocker=true`; a full-stack 503 test; keep the PostgreSQL suite sequential (one shared container); run `check-conventions.sh`, `terraform test` (fail on "0 passed"), tflint and trivy; never delete lock files before pre-commit |
-| `client-identity` | Spec and prove (component tests) the 3 deferred view scenarios: advisor conflict reload, client cancel conflict re-fetch, stale ticket "not found"; show the `503` message in the views |
+| `infra-cicd` | Run `./mvnw test -DrequireDocker=true`; a full-stack 503 test; keep the PostgreSQL suite sequential (one shared container); run `check-conventions.sh`, `terraform test` (fail on "0 passed"), tflint and trivy; never delete lock files before pre-commit; run `npm run e2e` on Linux (`npx playwright install --with-deps chromium`; upload `playwright-report/` and `test-results/`) |
+| `client-identity` | Upgrade the stale-ticket browser test to a true stored-ticket test once persistence exists; fix the AM/PM position bug via ISO times; show the `503` message in the views |
 
 ## Docs, specs and archive
 
