@@ -64,7 +64,16 @@ terraform init -backend-config=backend.hcl
 terraform plan
 ```
 
-`prod` stays plan-only until the `infra-app` change.
+`prod` stays plan-only: the network and app modules are not wired into it yet.
+
+## 8b. Dev cost switch (network now, app later)
+
+`terraform apply` in `envs/dev` with default variables creates only the network: VPC, 6 subnets, internet gateway, route tables and the S3 gateway endpoint (free). No NAT, no EIP: about $0/month.
+
+- **App on**: `enable_app = true` adds RDS, ALB, ECS, ECR and S3 + CloudFront. Tasks also need egress to pull images: `nat_mode = "single"` (cheapest) or `enable_vpc_endpoints = true`. Push an image, set `app_image_tag`, then raise `app_desired_count`. Details: [infra.md](infra.md), `infra/modules/*/README.md`.
+- **Approx. monthly (us-east-1)**: RDS db.t4g.micro + 20 GB gp3 ~$14, ALB ~$16 + ~$7 public IPv4, Fargate 0.5 vCPU / 1 GB ~$18 per running task, single NAT ~$33 + $0.045/GB + ~$3.65 IPv4 (per_az ~$66-70), interface endpoints ~$58, secret $0.40; CloudFront, S3, ECR and logs cost cents.
+- **Back to $0**: `enable_app = false` (and `nat_mode = "none"`), then `terraform apply`; or `terraform destroy`. Dev deletes the database without a final snapshot.
+- **Why a switch, not "paused"**: a stopped RDS instance restarts itself after 7 days (and its storage and secret still bill), and the ALB bills every hour it exists.
 
 ## 9. Budget 100% response
 
