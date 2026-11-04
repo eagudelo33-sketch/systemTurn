@@ -118,8 +118,8 @@ In `turnos[]`, unattended tickets show `horaAtencion: "-"`.
 |-------|--------------|
 | `App.jsx` | Switches views by URL: `/` = client, `/?vista=asesor` = advisor |
 | `services/turnosService.js` | The only place that calls the API. Normalizes responses for the views. Maps `CONFLICTO` to a friendly, refreshable error and `SERVICIO_NO_DISPONIBLE` (503) to an error carrying the server message (a Spanish fallback if the body has none) and `code`, not refreshable. |
-| `views/ClienteView.jsx` | Request ticket, see number/state/position, cancel (with confirm), manual refresh, stats. On a cancel conflict it re-fetches the ticket and keeps the message |
-| `views/AsesorView.jsx` | Next ticket card, "call next" button, full table with search by number and filter by state, loading/error/empty states. On a conflict it refreshes the panel, then shows the message (no retry button) |
+| `views/ClienteView.jsx` | Request ticket, see number/state/position, cancel (with confirm), manual refresh, stats. On a cancel conflict it re-fetches the ticket and keeps the message. If the server no longer has the ticket (`TURNO_NO_ENCONTRADO`) the card is cleared and "Solicitar turno" is offered again; on a 503 or network failure the last-known ticket is kept |
+| `views/AsesorView.jsx` | Next ticket card, "call next" button, full table with search by number and filter by state. Unknown data (`turns = null`) is never shown as an empty queue: any failed load clears the data, the badge (`role="status"`) reads "Conectando con el servidor…" / "Servidor no disponible" / "Conectado al servidor", and "Llamar al siguiente" is disabled until data is loaded. Visible copy per state comes from `utils/panelAsesor.js` (`estadoPanel`). On a conflict it refreshes the panel, then shows the message (no retry button) |
 | `services/turnosSimulation.js` | Old offline mock. **Not used** anymore. |
 | `utils/turnoFormat.js` | Formatting helpers (labels, `T-000`, minutes in `es-CO`) |
 
@@ -154,18 +154,18 @@ Backend: **147 tests**, `./mvnw test`. The 17 PostgreSQL tests need Docker (see 
 | `SolicitarConcurrencyPostgresTest` | 3 | **PostgreSQL.** 10 threads get numbers 1..10 exactly once |
 | `RestartSurvivalPostgresTest` | 2 | **PostgreSQL.** Two contexts on one container: tickets 1-11 and their states survive |
 | **Backend total** | **147** | `./mvnw test` |
-| Frontend `turnosService.test.js` | 11 | Vitest. Response normalization, `CONFLICTO` and `SERVICIO_NO_DISPONIBLE` mapping. No component tests for the views |
-| Frontend `e2e/*.spec.js` | 13 | Playwright (Chromium). Both views in a real browser: 9 against the real backend, 4 with mocked responses. See [Browser E2E](#browser-e2e-playwright) |
+| Frontend Vitest (`turnosService.test.js`, `panelAsesor.test.js`) | 19 | Response normalization, `CONFLICTO` / `SERVICIO_NO_DISPONIBLE` mapping, `TURNO_NO_ENCONTRADO` typed error, advisor panel copy per state. No component tests for the views |
+| Frontend `e2e/*.spec.js` | 18 | Playwright (Chromium). Both views in a real browser: 9 against the real backend, 9 with mocked responses. See [Browser E2E](#browser-e2e-playwright) |
 
 ### Browser E2E (Playwright)
 
-13 tests in `frontend/frontend-react/react-client/e2e/`, run serially in headless Chromium. `npm run e2e` boots the backend (profiles `dev,demo`, in-memory H2) and the Vite dev server, runs the suite, and stops both. No Docker or AWS credentials are needed. Rules: [browser-e2e](../openspec/specs/browser-e2e/spec.md).
+18 tests in `frontend/frontend-react/react-client/e2e/`, run serially in headless Chromium. `npm run e2e` boots the backend (profiles `dev,demo`, in-memory H2) and the Vite dev server, runs the suite, and stops both. No Docker or AWS credentials are needed. Rules: [browser-e2e](../openspec/specs/browser-e2e/spec.md).
 
 | File | Tests | Backend | Covers |
 |------|-------|---------|--------|
 | `01-cliente.spec.js` | 4 | Real | Request a ticket (`T-012` on a fresh seed, position), cancel and keep, cancel and confirm, stats |
 | `02-asesor.spec.js` | 5 | Real | Dashboard load, search by number, filter by status, call next, switch between views |
-| `03-respuestas-simuladas.spec.js` | 4 | Mocked | Cancel conflict (409) re-fetches the ticket, advisor conflict reloads without `Reintentar`, a ticket missing from today's queue shows "No encontramos ese turno.", advisor 503 shows `Reintentar` and recovers |
+| `03-respuestas-simuladas.spec.js` | 9 | Mocked | Cancel conflict (409) re-fetches the ticket; advisor conflict reloads without `Reintentar`; a ticket missing from today's queue is cleared with "No encontramos ese turno."; advisor 503 shows "Servidor no disponible" + `Reintentar` and recovers; advisor loading is not reported as connected; a genuinely empty queue is reported as empty; a refresh failure after "call next" discards stale data; the client keeps its ticket when a refresh fails; accessible state semantics (status badge, single alert, native disabled) |
 
 - **Expectations come from the live dashboard.** Position, next ticket and counts are read from `GET /api/v1/turnos/dashboard` in the same test (`e2e/support/api.js`), never hard-coded from the clock or the seed order. Times like `08:25 a. m.` are parsed AM/PM-aware.
 - **Mocked tests** use Playwright route interception for the cases the real backend cannot produce on demand (409, 503, a stale ticket).
@@ -263,7 +263,7 @@ Browser E2E (Playwright), from `frontend\frontend-react\react-client`. It starts
 
 ```powershell
 npm run e2e:install            # first time only: downloads Chromium
-npm run e2e                    # headless, 13 tests
+npm run e2e                    # headless, 18 tests
 npm run e2e:headed             # visible browser
 npm run e2e:ui                 # Playwright UI mode
 npm run e2e:report             # open the last HTML report (playwright-report/)

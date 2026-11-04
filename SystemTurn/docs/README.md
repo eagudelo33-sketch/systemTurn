@@ -26,7 +26,7 @@ All specs, with requirement counts and the tests that prove them: [specs index](
 | Database | ✅ PostgreSQL in production, H2 file for local `dev`; data survives restarts |
 | Operations | ✅ Env-driven config, startup guards, health probes that ignore the DB, fast `503`, graceful shutdown |
 | Infrastructure | ✅ Terraform foundation, network module and app module (ECS, RDS, ALB, CloudFront), verified offline. `dev` applies the network only (~$0); the paid app layer is off behind `enable_app`. `prod` not wired yet. ⏳ First real `apply` is manual |
-| Frontend tests | ✅ Vitest for the service layer (11) + Playwright browser tests (13) covering both views, including the conflict and stale-ticket scenarios and a mocked advisor 503 (not a full-stack 503). ⚠️ No component tests for the views |
+| Frontend tests | ✅ Vitest (19: service layer + advisor panel states) + Playwright browser tests (18) covering both views, including conflict, stale-ticket, loading, empty-queue and refresh-failure states and a mocked advisor 503 (not a full-stack 503). ⚠️ No component tests for the views |
 | Live updates | ❌ Manual refresh |
 | Client keeps their ticket after a refresh | ❌ Ticket lives only in React state |
 | Authentication | ❌ Anyone can call "next" or cancel any ticket |
@@ -40,8 +40,8 @@ All specs, with requirement counts and the tests that prove them: [specs index](
 | 3 | `infra-foundation` | ✅ Done | Terraform state backend, budget, env roots, conventions |
 | 4 | `infra-network-app` | ✅ Done | VPC module (3 tiers, 2 AZs, `nat_mode`), app module (ECR, ECS Fargate, ALB, RDS PostgreSQL, S3 + CloudFront), wired into `dev` behind `enable_app`. `prod` wiring deferred |
 | 5 | `e2e-browser-tests` | ✅ Done | Playwright suite: 13 browser tests over both views, real backend + mocked error responses |
-| 6 | `ux-error-states` | ⏭️ Next | Honest error and stale states in the views: advisor 503 and stale ticket (found by the browser tests) |
-| 7 | `infra-cicd` | Planned | GitHub Actions with OIDC, plan on PR, manual prod approval |
+| 6 | `ux-error-states` | ✅ Done | Honest error and stale states: the advisor never shows an unknown state as connected or empty; a ticket the server no longer has is cleared |
+| 7 | `infra-cicd` | ⏭️ Next | GitHub Actions with OIDC, plan on PR, manual prod approval |
 | 8 | `client-identity` | Planned (can slot in earlier) | `GET /turnos/{id}`, ticket kept in the browser, ISO times and state codes, component tests |
 | 9 | `wait-estimate` | Planned | Per-ticket wait estimate |
 | 10 | `live-updates` | Planned | WebSocket push to both views |
@@ -74,10 +74,8 @@ All specs, with requirement counts and the tests that prove them: [specs index](
 | No component tests for the views (the 3 view scenarios deferred from `persistence-daily-queue` are now proven by the browser tests) | P3 | — |
 | API returns display text (`"08:25 a. m."`, `"Pendiente"`) that the frontend re-parses | P2 | `client-identity` |
 | Client position is wrong after a re-fetch: `posicionEnDashboard` ignores the AM/PM suffix, so the order breaks across noon (found while writing the browser tests) | P2 | `client-identity` (fixed by ISO times) |
-| Advisor 503 still shows "Conectado al servidor", "No hay turnos pendientes" and "0 registros": it claims an empty queue when the state is unknown (found in browser-test screenshots) | P2 | `ux-error-states` |
-| Stale ticket shows "No encontramos ese turno." while the card still shows the ticket as Pendiente with a position (found in browser-test screenshots) | P2 | `ux-error-states` |
 | Advisor greeting "Buenos días, asesor" is hardcoded regardless of the time of day (found in browser-test screenshots) | P3 | any change touching `AsesorView` |
-| Dead code: `turnosSimulation.js`, `isDemoMode` | P3 | any change touching the frontend |
+| Dead code: `turnosSimulation.js` | P3 | any change touching the frontend |
 | No Postman collection or OpenAPI file for the API | P3 | — |
 | No pagination on the dashboard; single advisor, no desk number; no reports | P3 | — |
 | AWS edge: ALB is HTTP only (no ACM), no WAF, no CloudFront-to-ALB secret header, no WebSocket path; `prod` not wired; nothing applied to a real account | P1 before a public deploy | `infra-cicd`, `live-updates`, a prod wiring change |

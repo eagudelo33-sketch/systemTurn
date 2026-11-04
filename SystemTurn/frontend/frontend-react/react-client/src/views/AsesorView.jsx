@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { callNextTurn, getDashboardData, isDemoMode } from '../services/turnosService.js'
+import { callNextTurn, getDashboardData } from '../services/turnosService.js'
+import { estadoPanel } from '../utils/panelAsesor.js'
 import '../asesor.css'
 
 function formatTime(value) {
@@ -18,7 +19,7 @@ async function cargarPanel() {
 }
 
 function AsesorView() {
-  const [turns, setTurns] = useState([])
+  const [turns, setTurns] = useState(null)
   const [nextTurn, setNextTurn] = useState(null)
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState('')
@@ -34,6 +35,8 @@ function AsesorView() {
       setStatus('ready')
       return true
     }
+    setTurns(null)
+    setNextTurn(null)
     setStatus('error')
     setError(resultado.message)
     return false
@@ -56,11 +59,12 @@ function AsesorView() {
     }
   }, [aplicarResultado])
 
-  const visibleTurns = useMemo(() => turns.filter((turn) => {
+  const visibleTurns = useMemo(() => (turns ?? []).filter((turn) => {
     const matchesFilter = filter === 'all' || turn.status === filter
     const matchesSearch = String(turn.number).toLowerCase().includes(search.toLowerCase())
     return matchesFilter && matchesSearch
   }), [filter, search, turns])
+  const panel = estadoPanel({ turns, nextTurn, status, visibles: visibleTurns.length })
 
   async function handleCallNext() {
     if (isCalling || !nextTurn) return
@@ -112,9 +116,9 @@ function AsesorView() {
                 <h1>Buenos días, asesor</h1>
                 <p>Gestiona la fila de turnos y brinda una atención eficiente.</p>
               </div>
-              <div className={`data-mode ${isDemoMode ? 'demo' : ''}`}>
+              <div className={`data-mode ${panel.claseInsignia}`} role="status">
                 <span className="status-dot" />
-                {isDemoMode ? 'Modo demostración' : 'Conectado al servidor'}
+                {panel.insignia}
               </div>
             </section>
             {error && <div className="alert" role="alert">{error}{!conflicto && <button type="button" onClick={refreshDashboard}>Reintentar</button>}</div>}
@@ -122,7 +126,7 @@ function AsesorView() {
               <div className="next-copy">
                 <div className="section-kicker">GESTIÓN DE FILA</div>
                 <h2 id="next-heading">Siguiente turno</h2>
-                <p>{nextTurn ? 'Este es el próximo turno según el orden registrado por el servidor.' : 'No hay turnos pendientes'}</p>
+                <p>{panel.textoSiguiente}</p>
               </div>
               <div className="next-action">
                 <div className="turn-number">{nextTurn ? nextTurn.number : '—'}</div>
@@ -135,7 +139,7 @@ function AsesorView() {
             <section className="turns-section" id="turnos" aria-labelledby="turns-heading">
               <div className="section-heading">
                 <div><h2 id="turns-heading">Lista de turnos</h2><p>Consulta el estado de todos los turnos de hoy.</p></div>
-                <span className="total-badge">{turns.length} registros</span>
+                <span className="total-badge">{panel.conteo}</span>
               </div>
               <div className="table-tools">
                 <label className="search-box">⌕<span className="sr-only">Buscar turno</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por número" /></label>
@@ -160,8 +164,7 @@ function AsesorView() {
                         <td><span className={`state-pill ${turn.status}`}>{turn.statusLabel}</span></td>
                       </tr>
                     ))}
-                    {status === 'ready' && visibleTurns.length === 0 && <tr><td className="empty-row" colSpan="4">No hay turnos que coincidan con la búsqueda.</td></tr>}
-                    {status === 'loading' && <tr><td className="empty-row" colSpan="4">Cargando turnos…</td></tr>}
+                    {panel.mensajeTabla && <tr><td className="empty-row" colSpan="4">{panel.mensajeTabla}</td></tr>}
                   </tbody>
                 </table>
               </div>

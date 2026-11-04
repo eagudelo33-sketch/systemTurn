@@ -8,7 +8,7 @@ How specs change: a change writes *delta* specs under `openspec/changes/<change>
 
 | Capability | What it guarantees | Req | Scenarios | Main tests |
 |------------|--------------------|-----|-----------|------------|
-| [daily-queue](daily-queue/spec.md) | Queue scoped to today (`America/Bogota`), numbering restarts daily, past-day cancel rejected | 5 | 5 | `TurnoServiceTest`, `e2e/03-respuestas-simuladas.spec.js` |
+| [daily-queue](daily-queue/spec.md) | Queue scoped to today (`America/Bogota`), numbering restarts daily, past-day cancel rejected, stale ticket cleared on typed not-found | 6 | 8 | `TurnoServiceTest`, `turnosService.test.js`, `e2e/03-respuestas-simuladas.spec.js` |
 | [ticket-persistence](ticket-persistence/spec.md) | Durable PostgreSQL storage, Flyway `V1` unchanged, domain isolated from persistence | 3 | 8 | `JpaTurnoRepository*Test`, `RestartSurvival*Test` |
 | [concurrency-conflicts](concurrency-conflicts/spec.md) | Unique daily numbers, optimistic locking, 409 `CONFLICTO`, engine-independent duplicate detection | 5 | 15 | `SolicitarConcurrency*Test`, `ConflictoHandlerTest`, `turnosService.test.js`, `e2e/03-respuestas-simuladas.spec.js` |
 | [demo-seed](demo-seed/spec.md) | CSV seed only under `demo` (+ `dev`), idempotent, atomic | 4 | 8 | `DemoSeedRunnerTest`, `DemoSeedAtomicityTest`, `StartupGuardTest` |
@@ -18,7 +18,7 @@ How specs change: a change writes *delta* specs under `openspec/changes/<change>
 
 | Capability | What it guarantees | Req | Scenarios | Main tests |
 |------------|--------------------|-----|-----------|------------|
-| [browser-e2e](browser-e2e/spec.md) | Playwright suite through a real browser, the Vite proxy and the real backend: client and advisor flows, mocked 503/409/stale-ticket views, fresh deterministic database, pinned toolchain | 12 | 29 | `e2e/01-cliente.spec.js`, `e2e/02-asesor.spec.js`, `e2e/03-respuestas-simuladas.spec.js` |
+| [browser-e2e](browser-e2e/spec.md) | Playwright suite through a real browser, the Vite proxy and the real backend: client and advisor flows, mocked 503/409/stale-ticket views, honest advisor load states, accessible state semantics, fresh deterministic database, pinned toolchain | 15 | 34 | `e2e/01-cliente.spec.js`, `e2e/02-asesor.spec.js`, `e2e/03-respuestas-simuladas.spec.js`, `src/utils/panelAsesor.test.js` |
 
 ## Infrastructure (Terraform)
 
@@ -31,7 +31,7 @@ How specs change: a change writes *delta* specs under `openspec/changes/<change>
 | [infra-app](infra-app/spec.md) | ECR, RDS PostgreSQL 17 (RDS-managed secret), ECS Fargate (`desired_count` 0), ALB readiness check, least-privilege IAM, private SPA bucket behind CloudFront | 8 | 11 | `modules/app/tests/app.tftest.hcl` |
 | [infra-repo-conventions](infra-repo-conventions/spec.md) | Ignores, LF line endings, static gates, pre-commit, runbook | 7 | 18 | `infra/scripts/check-conventions.sh` |
 
-**Total: 76 requirements, 167 scenarios.**
+**Total: 80 requirements, 175 scenarios.**
 
 ## Change history (archive)
 
@@ -42,6 +42,7 @@ How specs change: a change writes *delta* specs under `openspec/changes/<change>
 | 2026-11-04 | [infra-foundation](../changes/archive/2026-11-04-infra-foundation/) | infra-state-backend, infra-cost-guardrails, infra-environments, infra-repo-conventions |
 | 2026-11-04 | [infra-network-app](../changes/archive/2026-11-04-infra-network-app/) | infra-network, infra-app (new); infra-environments, infra-cost-guardrails (modified) |
 | 2026-11-04 | [e2e-browser-tests](../changes/archive/2026-11-04-e2e-browser-tests/) | browser-e2e (new); concurrency-conflicts, daily-queue (modified: the 3 view scenarios deferred by `persistence-daily-queue` are now proven) |
+| 2026-11-04 | [ux-error-states](../changes/archive/2026-11-04-ux-error-states/) | browser-e2e (2 modified, 3 added), daily-queue (1 modified, 1 added), runtime-operations (1 modified note): honest advisor load states, typed `TURNO_NO_ENCONTRADO`, client keeps its ticket on 503 |
 
 Each archived change holds its `proposal.md`, `design.md`, `tasks.md`, `verify-report.md` and `archive-report.md` (open obligations for later changes are listed there).
 
