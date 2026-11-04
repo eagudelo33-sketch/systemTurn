@@ -1,10 +1,12 @@
-# Delta for infra-state-backend (NEW)
+# Infra State Backend Specification
 
-Scope: `SystemTurn/infra/bootstrap/` and the backend configuration of env roots. No application, API, backend (`backend/turnos-api`) or frontend (`react-client`) change occurs.
+## Purpose
+
+Scope: `SystemTurn/infra/bootstrap/` and the backend configuration of env roots. No application, API, backend (`backend/turnos-api`) or frontend (`frontend/frontend-react/react-client`) change occurs.
 
 Verification: every scenario below is provable offline by `terraform test` (`command = plan`, `mock_provider "aws"`), `terraform validate`/`fmt -check`, tflint, trivy, or a repo-file check. Test files: `infra/bootstrap/tests/state_bucket.tftest.hcl` (run-block names are the scenario IDs), `infra/scripts/check-conventions.sh` (repo-file checks).
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Hardened state bucket
 The bootstrap root MUST define exactly one S3 bucket for Terraform state, named from the variable `state_bucket_name` (no account ID literal in committed files). The bucket MUST have versioning `Enabled`, server-side encryption with `AES256`, all four Block Public Access flags `true`, and ownership controls `BucketOwnerEnforced`.

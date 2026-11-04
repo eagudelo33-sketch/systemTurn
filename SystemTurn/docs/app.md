@@ -1,19 +1,13 @@
-# Current State (as of 2026-11-03)
+# SystemTurn Application
 
-What the code does **today**, verified by reading the source. When this disagrees with the whiteboard or diagram, the code wins here; the differences are listed in [02-gaps-and-questions.md](02-gaps-and-questions.md).
+How the ticket-queue application works **today**: architecture, domain, business rules, API, frontend, configuration and tests. Verified against the source on 2026-11-04. For status, roadmap and open gaps see [README.md](README.md); for the binding rules see the specs linked in each section.
 
-## At a glance
-
-| Area | Status |
-|------|--------|
-| Backend API (4 endpoints) | ✅ Working, tested |
-| Advisor view | ✅ Working against real API |
-| Client view | ✅ Working against real API (with limitations) |
-| Database | ✅ PostgreSQL (production) + Spring Data JPA + Flyway. H2 file database only under the `dev` profile. Data survives restarts |
-| Operations | ✅ Env-driven datasource, startup guards, health probes that ignore the database, graceful shutdown, fast `503` when the database is down |
-| Real-time updates | ❌ Not implemented — manual refresh |
-| Frontend tests | ✅ Vitest, service level only (no component tests for the views) |
-| Postman collection | ❌ Not in repo |
+| Section | Spec |
+|---------|------|
+| [Architecture](#architecture), [Domain model](#domain-model) | [ticket-persistence](../openspec/specs/ticket-persistence/spec.md) |
+| [Business rules](#business-rules) | [daily-queue](../openspec/specs/daily-queue/spec.md), [concurrency-conflicts](../openspec/specs/concurrency-conflicts/spec.md), [demo-seed](../openspec/specs/demo-seed/spec.md) |
+| [API contract](#api-contract-v1), [Frontend](#frontend) | [concurrency-conflicts](../openspec/specs/concurrency-conflicts/spec.md), [runtime-operations](../openspec/specs/runtime-operations/spec.md) |
+| [Configuration and operations](#configuration-and-operations) | [runtime-operations](../openspec/specs/runtime-operations/spec.md) |
 
 ## Architecture
 
@@ -63,7 +57,7 @@ CANCELADO
 
 Only `PENDIENTE` can change. Any other transition throws `OperacionInvalidaException` → HTTP 400. A pending ticket from a **past day** cannot be cancelled either (same exception, HTTP 400).
 
-## Business rules (implemented)
+## Business rules
 
 | Rule | Where |
 |------|-------|
@@ -178,9 +172,9 @@ The service tests use a fixed zoned `Clock`, so they are deterministic. Keep tha
 
 ## Tech versions
 
-Java 17 · Spring Boot 4.1.2 · PostgreSQL 17 (prod) · H2 (file, `dev` only) · Spring Data JPA · Flyway · Actuator · Testcontainers · Maven wrapper · React 19 · Vite 8 · Vitest · ESLint 10
+Java 17 · Spring Boot 4.1.2 · PostgreSQL 17 (prod) · H2 (file, `dev` only) · Spring Data JPA · Flyway · Actuator · Testcontainers · Maven wrapper · React 19 · Vite 8 · Vitest · ESLint 10 · Terraform 1.16 (`~> 1.11`) · AWS provider 6.69.1 · tflint · trivy · pre-commit
 
-## Configuration
+## Configuration and operations
 
 The datasource has **no default URL**: outside the `dev` profile the app needs `SPRING_DATASOURCE_URL`. Nothing secret is committed.
 
@@ -222,6 +216,8 @@ Only `health` is exposed over HTTP (`/actuator/env`, `/actuator/beans` return 40
 | `/actuator/health` | Yes, as an aggregate status (no details) | Operators. It turns `DOWN` (503) when the database is unreachable |
 
 With the database down the instance stays in rotation: requests that need the database answer `503 SERVICIO_NO_DISPONIBLE` instead of the task being pulled out (an RDS failover must not remove every task).
+
+Infrastructure (Terraform, AWS) is documented in [infra-onboarding.md](infra-onboarding.md).
 
 ## How to run
 

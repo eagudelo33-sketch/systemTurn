@@ -1,4 +1,4 @@
-# Runtime Operations Specification (NEW capability)
+# Runtime Operations Specification
 
 ## Purpose
 The API runs as several stateless containers against PostgreSQL: configuration comes from the environment, unsafe database setups fail at startup, probes ignore the database, and shutdown is graceful.

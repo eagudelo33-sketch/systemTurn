@@ -1,19 +1,103 @@
-# SystemTurn Docs
+# SystemTurn — Start Here
 
-These docs capture **what SystemTurn is today** and **what is still missing**, as the starting point for Spec-Driven Development (SDD).
+SystemTurn is a **virtual queue** (fila virtual). A **client** taps a button and gets a ticket like `T-011`. An **advisor** sees the queue and presses "call next", which serves the oldest pending ticket. Everyone sees how many people are waiting, how many were served, and the average wait.
 
-## Reading order
+This page is the map. Read it first; it points you to the one document or spec you need.
 
-| # | Doc | Read it to answer |
-|---|-----|-------------------|
-| 1 | This page | What is SDD and why are we writing docs first? |
-| 2 | [01-current-state.md](01-current-state.md) | What does the system actually do right now? |
-| 3 | [02-gaps-and-questions.md](02-gaps-and-questions.md) | Where does the code differ from the plan, and what must we decide? |
-| 4 | [infra-onboarding.md](infra-onboarding.md) | How do I bring up the AWS state bucket, budget and env roots? |
+## Feature map
 
-## The product in one paragraph
+| Feature | How it works | Exact rules (spec) | Code |
+|---------|--------------|--------------------|------|
+| Ticket queue: request, cancel, call next, daily reset | [app.md → Business rules](app.md#business-rules), [API](app.md#api-contract-v1) | [daily-queue](../openspec/specs/daily-queue/spec.md), [concurrency-conflicts](../openspec/specs/concurrency-conflicts/spec.md) | `backend/turnos-api/.../application`, `domain` |
+| Data storage (PostgreSQL, H2 for dev) | [app.md → Architecture](app.md#architecture), [Domain model](app.md#domain-model) | [ticket-persistence](../openspec/specs/ticket-persistence/spec.md) | `.../infrastructure/persistence`, `db/migration` |
+| Demo data | [app.md → Business rules](app.md#business-rules) | [demo-seed](../openspec/specs/demo-seed/spec.md) | `.../infrastructure/DemoSeedRunner.java` |
+| Running in production: config, startup guards, health, 503, shutdown | [app.md → Configuration and operations](app.md#configuration-and-operations) | [runtime-operations](../openspec/specs/runtime-operations/spec.md) | `application.yml`, `StartupGuard.java` |
+| Client and advisor screens | [app.md → Frontend](app.md#frontend) | [concurrency-conflicts](../openspec/specs/concurrency-conflicts/spec.md) (service mapping) | `frontend/frontend-react/react-client/src` |
+| AWS infrastructure (Terraform) | [infra-onboarding.md](infra-onboarding.md) | [infra-state-backend](../openspec/specs/infra-state-backend/spec.md), [infra-cost-guardrails](../openspec/specs/infra-cost-guardrails/spec.md), [infra-environments](../openspec/specs/infra-environments/spec.md), [infra-repo-conventions](../openspec/specs/infra-repo-conventions/spec.md) | `infra/` |
 
-SystemTurn is a **virtual queue** (fila virtual). A **client** (cliente) taps a button on their phone and gets a ticket like `T-011`. An **advisor** (asesor) sees the queue and presses "call next", which serves the oldest pending ticket. Everyone can see live numbers: how many people are waiting, how many were served, and the average wait.
+All specs, with requirement counts and the tests that prove them: [specs index](../openspec/specs/README.md). Why something changed: [change archive](../openspec/changes/archive/). How to run it in Spanish: [../README.md](../README.md).
+
+## Status (2026-11-04)
+
+| Area | Status |
+|------|--------|
+| Backend API (4 endpoints) | ✅ Working, 147 tests (17 against real PostgreSQL) |
+| Advisor and client views | ✅ Working against the real API |
+| Database | ✅ PostgreSQL in production, H2 file for local `dev`; data survives restarts |
+| Operations | ✅ Env-driven config, startup guards, health probes that ignore the DB, fast `503`, graceful shutdown |
+| Infrastructure | ✅ Terraform foundation (state bucket, budget, `dev`/`prod` roots), verified offline. ⏳ First real `apply` is manual |
+| Frontend tests | ⚠️ Vitest for the service layer only (11); no component tests for the views |
+| Live updates | ❌ Manual refresh |
+| Client keeps their ticket after a refresh | ❌ Ticket lives only in React state |
+| Authentication | ❌ Anyone can call "next" or cancel any ticket |
+
+## Roadmap
+
+| # | Change | Status | What it delivers |
+|---|--------|--------|------------------|
+| 1 | `persistence-daily-queue` | ✅ Done | Database, daily queue, numbering restart, 409 conflicts, demo seed |
+| 2 | `postgres-adapter` | ✅ Done | PostgreSQL in production, guards, health, 503, graceful shutdown |
+| 3 | `infra-foundation` | ✅ Done | Terraform state backend, budget, env roots, conventions |
+| 4 | `infra-network` | ⏭️ Next | VPC module (3 tiers, 2 AZs, `nat_mode`), wired into `dev`/`prod` |
+| 5 | `infra-app` | Planned | ECR, ECS Fargate, ALB, RDS PostgreSQL, S3 + CloudFront |
+| 6 | `infra-cicd` | Planned | GitHub Actions with OIDC, plan on PR, manual prod approval |
+| 7 | `client-identity` | Planned (can slot in earlier) | `GET /turnos/{id}`, ticket kept in the browser, ISO times and state codes, component tests |
+| 8 | `wait-estimate` | Planned | Per-ticket wait estimate |
+| 9 | `live-updates` | Planned | WebSocket push to both views |
+| 10 | `advisor-auth` | Planned | Login for advisors (required before a public deploy) |
+
+## Decisions already made
+
+| Topic | Decision |
+|-------|----------|
+| Database | PostgreSQL in production; H2 file only under the `dev` profile (zero-Docker local dev) |
+| Day boundary | The queue resets every day in `America/Bogota`; numbering restarts at `T-001` |
+| CSV | Demo data only (`demo` profile, together with `dev`) |
+| Deployment | The app will be deployed on AWS (`us-east-1`); auth is required before going public |
+| API format | May change: move to ISO times and state codes (planned in `client-identity`) |
+| Live updates | WebSockets |
+| Wait estimate | Position × average time between consecutive attentions today; a configurable default per person when nobody has been served yet; capped at 120 minutes |
+| Health checks | The database is excluded from readiness/liveness, so an RDS failover does not make ECS replace tasks; DB-dependent requests answer `503` |
+| Infrastructure layout | One Terraform root per environment (no workspaces); `bootstrap/` separate; account ID kept out of the repo |
+| Frontend ↔ backend | Every API contract change ships with the matching frontend change |
+
+## Open gaps
+
+| Gap | Priority | Planned in |
+|-----|----------|------------|
+| Client loses their ticket on refresh; no `GET /turnos/{id}` (the client downloads the whole dashboard) | P1 | `client-identity` |
+| No live updates (stats load once; views refresh only after their own action) | P1 | `live-updates` |
+| No authentication or roles | P1 before a public deploy | `advisor-auth` |
+| No per-ticket wait estimate | P2 | `wait-estimate` |
+| No component tests for the views; 3 view scenarios deferred from `persistence-daily-queue` | P2 | `client-identity` |
+| API returns display text (`"08:25 a. m."`, `"Pendiente"`) that the frontend re-parses | P2 | `client-identity` |
+| Dead code: `turnosSimulation.js`, `isDemoMode` | P3 | any change touching the frontend |
+| No Postman collection or OpenAPI file for the API | P3 | — |
+| No pagination on the dashboard; single advisor, no desk number; no reports | P3 | — |
+
+## Obligations carried into upcoming changes
+
+These come from the archive reports. Each one must be handled by the change that owns it.
+
+| Change | Must do |
+|--------|---------|
+| `infra-network` | Prove the region and `default_tags` on a real resource in `plan` (today proven only through an output); replace the `env_roots_declare_no_resources` scenario; bump the tflint AWS plugin to 0.50.0 (allowed from 2026-11-06) |
+| `infra-app` | ALB health check `/actuator/health/readiness`; `socketTimeout` and `sslmode` in `SPRING_DATASOURCE_URL`; never run the `test` or `demo` profile in production; RDS PostgreSQL 17 (tests pin `postgres:17.10`); pool size × tasks < `max_connections`; ALB idle timeout long enough for WebSockets |
+| `infra-cicd` | Run `./mvnw test -DrequireDocker=true`; a full-stack 503 test; keep the PostgreSQL suite sequential (one shared container); run `check-conventions.sh`, `terraform test` (fail on "0 passed"), tflint and trivy; never delete lock files before pre-commit |
+| `client-identity` | Spec and prove (component tests) the 3 deferred view scenarios: advisor conflict reload, client cancel conflict re-fetch, stale ticket "not found"; show the `503` message in the views |
+
+## Docs, specs and archive
+
+| | Docs (`docs/`) | Specs (`openspec/specs/`) | Archive (`openspec/changes/archive/`) |
+|---|---|---|---|
+| Answers | How it works, how to run it | What MUST be true, and which test proves it | Why it changed |
+| Updated | With every change | By archive, merging the change's delta specs | Never (frozen history) |
+
+## How we work: Spec-Driven Development
+
+Every change follows `explore → propose → spec → design → tasks → apply → verify → archive`. The spec states *what* must be true as requirements with Given/When/Then scenarios; every scenario is proven by an automated test, and verify only passes when all of them are. Checks that need a real AWS account are listed as *Operational notes* in the spec instead.
+
+Example: *"The system MUST serve pending tickets in order of request time."* **Given** ticket 7 at 08:34 and ticket 9 at 08:41, **when** the advisor calls next, **then** ticket 7 is served first.
 
 ## Team
 
@@ -23,44 +107,3 @@ SystemTurn is a **virtual queue** (fila virtual). A **client** (cliente) taps a 
 | Kevin | Data |
 | Edgar | Backend (Spring Boot) |
 | Diover | Testing |
-
-## SDD in five minutes
-
-**The problem SDD solves.** Without a written agreement, each person builds from their own memory of a whiteboard meeting. Frontend assumes one response shape, backend returns another, and testing doesn't know what "correct" means. Bugs then are not code mistakes, they are *disagreements* discovered late.
-
-**The idea.** Write down *what* the system must do before writing *how*. The spec becomes the single source of truth that code, tests, and reviews are checked against.
-
-**The cycle**
-
-```text
-explore → propose → spec → design → tasks → apply → verify → archive
-```
-
-| Phase | Question it answers | Output |
-|-------|--------------------|--------|
-| Explore | What exists? What are the options? | Notes (these docs are this phase) |
-| Propose | What change do we want and why? | Short proposal: intent, scope, out of scope |
-| Spec | What must be true when we are done? | Requirements + scenarios (Given/When/Then) |
-| Design | How will we build it? | Technical decisions and tradeoffs |
-| Tasks | In what order? | A checklist of small, testable steps |
-| Apply | — | Code + tests |
-| Verify | Does the code match the spec? | Pass/fail per scenario |
-| Archive | — | Spec merged into the permanent "living" spec |
-
-**A requirement vs. a scenario**
-
-- *Requirement*: "The system MUST serve pending tickets in order of request time."
-- *Scenario* (testable example):
-  - **Given** ticket 7 requested at 08:34 and ticket 9 at 08:41, both pending
-  - **When** the advisor calls next
-  - **Then** ticket 7 becomes Attended, and ticket 9 is now first in line
-
-If you can't write a scenario for a requirement, the requirement is still too vague.
-
-## Why docs first
-
-You can't spec a change against a baseline you don't know. The code already makes many decisions (FIFO by time, `max + 1` numbering, in-memory storage). Some match the whiteboard, some don't. Writing them down turns hidden decisions into visible ones the team can confirm or change.
-
-## Next step
-
-Read [01-current-state.md](01-current-state.md), then bring the open questions in [02-gaps-and-questions.md](02-gaps-and-questions.md) to the team. Each answered question becomes input for the first SDD proposal.

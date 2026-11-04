@@ -6,6 +6,9 @@ Sistema de gestión de turnos con un backend en Spring Boot y una interfaz web e
 
 - `backend/turnos-api`: API REST desarrollada con Java y Spring Boot.
 - `frontend/frontend-react/react-client`: aplicación web desarrollada con React y Vite.
+- `infra`: infraestructura en AWS con Terraform (estado remoto, presupuesto, entornos `dev`/`prod`). Guía: [`docs/infra-onboarding.md`](docs/infra-onboarding.md).
+- `openspec/specs`: especificaciones vigentes (requisitos y escenarios). Índice: [`openspec/specs/README.md`](openspec/specs/README.md).
+- `docs`: documentación. **Empieza por [`docs/README.md`](docs/README.md)** (mapa por funcionalidad, estado, roadmap y decisiones).
 
 ## Vista del asesor
 
@@ -83,34 +86,9 @@ $env:SPRING_DATASOURCE_PASSWORD = "<tu-contraseña>"
 
 Flyway crea el esquema (`V1`) al arrancar y Hibernate solo lo valida.
 
-#### Variables de entorno
+#### Configuración y operación
 
-| Variable | Valor por defecto | Para qué sirve |
-|----------|-------------------|----------------|
-| `SPRING_DATASOURCE_URL` | sin valor (obligatoria fuera de `dev`) | URL JDBC de PostgreSQL. Para TLS (`sslmode`) y `socketTimeout` agrégalos a la URL |
-| `SPRING_DATASOURCE_USERNAME` | sin valor | Usuario de la base de datos |
-| `SPRING_DATASOURCE_PASSWORD` | sin valor | Contraseña de la base de datos |
-| `TURNOS_DB_POOL_SIZE` | `10` | Tamaño máximo del pool de conexiones. Tamaño × número de instancias debe quedar por debajo de `max_connections` de la base |
-| `TURNOS_DB_CONNECT_RETRIES` | `10` | Reintentos de Flyway al conectar durante el arranque |
-| `TURNOS_DB_PATH` | `./data/turnos` | Ruta del archivo H2. **Solo** con el perfil `dev` |
-| `turnos.timezone` (`TURNOS_TIMEZONE`) | `America/Bogota` | Zona horaria que define "hoy" para la fila |
-| `TURNOS_ALLOWED_ORIGINS` | `http://localhost:4200,http://localhost:5173,http://127.0.0.1:5173` | Orígenes CORS permitidos, separados por coma |
-| `SPRING_PROFILES_ACTIVE` | sin valor | Perfiles activos (`dev`, `demo`, `test`). No uses `test` ni `demo` en producción |
-
-#### Protecciones al arrancar
-
-El backend se niega a arrancar (con un mensaje que dice qué corregir) en estos casos:
-
-| Situación | Resultado |
-|-----------|-----------|
-| No hay `SPRING_DATASOURCE_URL` y no está el perfil `dev` | Falla: no se crea ninguna base embebida en silencio |
-| La URL es de H2 (`jdbc:h2:`) y no está activo `dev` ni `test` | Falla |
-| El perfil `demo` está activo sin `dev` | Falla: `demo` solo se permite con `dev` |
-
-#### Salud y apagado
-
-- Solo se expone el endpoint `health`. Para el balanceador (ALB) usa `/actuator/health/readiness`; `/actuator/health/liveness` es la sonda de vida. Ninguna de las dos incluye la base de datos, así que siguen en `UP` aunque la base esté caída. `/actuator/health` sí refleja el estado de la base, para quien opera el servicio.
-- El apagado es ordenado (`server.shutdown=graceful`, hasta 25 s por fase): las solicitudes en curso terminan antes de cerrar.
+Variables de entorno (`SPRING_DATASOURCE_*`, `TURNOS_DB_POOL_SIZE`, `TURNOS_DB_PATH`, etc.), perfiles (`dev`, `demo`, `test`), protecciones al arrancar, endpoints de salud y apagado ordenado: ver [`docs/app.md` → Configuration and operations](docs/app.md#configuration-and-operations). Regla clave: no uses los perfiles `test` ni `demo` en producción.
 
 ### Frontend
 
@@ -143,7 +121,7 @@ Vite redirige las solicitudes que comienzan con `/api` hacia Spring Boot en el p
 
 El backend decide cuál es el siguiente turno. React muestra la información y actualiza la pantalla después de cada operación.
 
-La descripción detallada (reglas de negocio, contrato, configuración y brechas conocidas) está en la carpeta [`docs/`](docs/README.md), en especial [`docs/01-current-state.md`](docs/01-current-state.md).
+La descripción detallada (reglas de negocio, contrato completo y configuración) está en [`docs/app.md`](docs/app.md); el estado, el roadmap y las brechas, en [`docs/README.md`](docs/README.md).
 
 ## Validación
 
