@@ -13,6 +13,16 @@ export const esSolicitudDeTurno = (response) =>
 export const esLlamadaAlSiguiente = (response) =>
   rutaDe(response) === '/api/v1/turnos/siguiente' && response.request().method() === 'PATCH'
 
+// Error bodies the backend contract defines; used to mock exactly one response.
+export const CONFLICTO = {
+  error: 'CONFLICTO',
+  mensaje: 'El turno cambió mientras se procesaba. Actualiza e intenta de nuevo.',
+}
+export const SERVICIO_NO_DISPONIBLE = {
+  error: 'SERVICIO_NO_DISPONIBLE',
+  mensaje: 'Servicio no disponible, intenta de nuevo en unos minutos.',
+}
+
 // Reads the live dashboard through the Vite proxy, the same path the browser uses.
 export async function leerDashboard(request) {
   const respuesta = await request.get(RUTA_DASHBOARD)
