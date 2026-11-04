@@ -1,0 +1,9 @@
+# trivy config: run from repo root: trivy config --config trivy.yaml SystemTurn/infra
+scan:
+  scanners:
+    - misconfig
+severity:
+  - HIGH
+  - CRITICAL
+exit-code: 1
+ignorefile: .trivyignore

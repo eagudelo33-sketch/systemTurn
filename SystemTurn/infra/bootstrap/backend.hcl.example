@@ -1,0 +1,6 @@
+# Copy to backend.hcl (gitignored) for phase 2: init -migrate-state -backend-config=backend.hcl
+bucket       = "systemturn-tfstate-<account-id>"
+key          = "bootstrap/terraform.tfstate"
+region       = "us-east-1"
+use_lockfile = true
+encrypt      = true

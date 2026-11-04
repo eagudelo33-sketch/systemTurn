@@ -2,3 +2,18 @@
 .DS_Store
 SystemTurn/frontend/frontend-react/react-client/.env
 .atl/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash*.log
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+SystemTurn/infra/**/backend.hcl
+.terraformrc

@@ -1,0 +1,8 @@
+# Generate on demand to stdout; never commit generated READMEs.
+# Usage: terraform-docs -c .terraform-docs.yml SystemTurn/infra/bootstrap
+formatter: markdown table
+sort:
+  enabled: true
+  by: name
+output:
+  file: ""
