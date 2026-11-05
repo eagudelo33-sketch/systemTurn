@@ -1,0 +1,144 @@
+name: infra
+
+# Static checks need no credentials and run for every PR (forks included).
+# plan: same-repo PRs only, when repository variable AWS_PLAN_ENABLED is 'true' (AWS role via OIDC, read-only).
+# apply-prod: manual, main only, behind the `prod` Environment approval. See SystemTurn/docs/cicd.md.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # github.token (not a secret) lets `tflint --init` download the AWS ruleset without rate limits.
+      GITHUB_TOKEN: ${{ github.token }}
+      TFLINT_VERSION: v0.65.0
+      TFLINT_SHA256: d4c545ed2e29d6338604b586f34f544f380f70f243aa72f7b484713835eaec61
+      TRIVY_VERSION: 0.76.1
+      TRIVY_SHA256: c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
+      ACTIONLINT_VERSION: 1.7.12
+      ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (2026-07-20)
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1 (2026-05-12)
+        with:
+          terraform_version: 1.16.6
+          terraform_wrapper: false
+      - name: Install tflint, trivy and actionlint (sha256 verified)
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/bin" "$RUNNER_TEMP/dl"
+          cd "$RUNNER_TEMP/dl"
+          curl -fsSLO "https://github.com/terraform-linters/tflint/releases/download/${TFLINT_VERSION}/tflint_linux_amd64.zip"
+          curl -fsSLO "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -fsSLO "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          {
+            echo "${TFLINT_SHA256}  tflint_linux_amd64.zip"
+            echo "${TRIVY_SHA256}  trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+            echo "${ACTIONLINT_SHA256}  actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          } | sha256sum -c -
+          unzip -oq tflint_linux_amd64.zip -d "$HOME/bin"
+          tar -xzf "trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" -C "$HOME/bin" trivy
+          tar -xzf "actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" -C "$HOME/bin" actionlint
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+      - name: Install pre-commit
+        run: pipx install pre-commit==4.7.0
+      # Runs terraform fmt/validate, tflint, trivy config and the convention checks through the hooks.
+      - name: pre-commit (all files)
+        run: pre-commit run --all-files --show-diff-on-failure
+      - name: Lock files unchanged
+        run: git diff --exit-code -- '*.lock.hcl'
+      - name: terraform test (5 directories, fails on 0 passed)
+        run: bash SystemTurn/infra/scripts/terraform-test-all.sh
+      - name: actionlint
+        run: actionlint -color
+      - name: Convention check self-test
+        run: bash SystemTurn/infra/scripts/test-check-conventions.sh
+
+  plan:
+    name: plan (${{ matrix.root }})
+    if: >-
+      vars.AWS_PLAN_ENABLED == 'true' &&
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        root: [dev, prod]
+    env:
+      TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+      TF_ROOT: ${{ matrix.root }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (2026-07-20)
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1 (2026-05-12)
+        with:
+          terraform_version: 1.16.6
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0 (2026-09-15)
+        with:
+          role-to-assume: ${{ secrets.AWS_PLAN_ROLE_ARN }}
+          aws-region: us-east-1
+      - name: terraform init
+        working-directory: SystemTurn/infra/envs/${{ matrix.root }}
+        run: |
+          terraform init -input=false -lockfile=readonly \
+            -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="key=${TF_ROOT}/terraform.tfstate" \
+            -backend-config="region=us-east-1" -backend-config="use_lockfile=true" -backend-config="encrypt=true"
+      - name: Plan (read-only, no state lock)
+        working-directory: SystemTurn/infra/envs/${{ matrix.root }}
+        run: terraform plan -lock=false -input=false -no-color
+
+  apply-prod:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: prod
+    concurrency:
+      group: tf-prod
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (2026-07-20)
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1 (2026-05-12)
+        with:
+          terraform_version: 1.16.6
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0 (2026-09-15)
+        with:
+          role-to-assume: ${{ secrets.AWS_APPLY_ROLE_ARN }}
+          aws-region: us-east-1
+      - name: terraform init
+        working-directory: SystemTurn/infra/envs/prod
+        run: |
+          terraform init -input=false -lockfile=readonly \
+            -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="key=prod/terraform.tfstate" \
+            -backend-config="region=us-east-1" -backend-config="use_lockfile=true" -backend-config="encrypt=true"
+      - name: terraform apply
+        working-directory: SystemTurn/infra/envs/prod
+        run: terraform apply -input=false -auto-approve
