@@ -52,3 +52,14 @@ variable "owner" {
     error_message = "owner must not be empty."
   }
 }
+
+variable "github_repository" {
+  type        = string
+  description = "GitHub repository (owner/name) allowed to assume the CI roles. Single source of truth for the OIDC trust."
+  default     = "eagudelo33-sketch/systemTurn"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", var.github_repository))
+    error_message = "github_repository must look like owner/name."
+  }
+}
