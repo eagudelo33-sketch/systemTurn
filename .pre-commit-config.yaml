@@ -34,10 +34,10 @@ repos:
         entry: bash SystemTurn/infra/scripts/check-conventions.sh
         language: system
         pass_filenames: false
-        files: ^(SystemTurn/infra/|SystemTurn/docs/infra-|\.gitignore|\.gitattributes|\.pre-commit-config\.yaml|\.tflint\.hcl|trivy\.yaml)
+        files: ^(SystemTurn/infra/|SystemTurn/docs/infra-|\.github/workflows/|\.gitignore|\.gitattributes|\.pre-commit-config\.yaml|\.tflint\.hcl|trivy\.yaml)
       - id: terraform-test
         name: terraform test (offline, mocked provider)
-        entry: bash -c 'for r in bootstrap envs/dev envs/prod; do (cd "SystemTurn/infra/$r" && terraform init -backend=false -input=false -no-color >/dev/null && terraform test) || exit 1; done'
+        entry: bash SystemTurn/infra/scripts/terraform-test-all.sh
         language: system
         pass_filenames: false
         files: ^SystemTurn/infra/

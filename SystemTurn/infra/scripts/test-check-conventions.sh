@@ -64,5 +64,29 @@ expect prevent_destroy_false_fails 1 -- bucket_declares_prevent_destroy
 printf 'resource "aws_s3_bucket" "s" {\n  tags = {\n  }\n  lifecycle {\n    prevent_destroy = true\n  }\n}\n' > "$B/main.tf"
 expect prevent_destroy_true_passes 0 -- bucket_declares_prevent_destroy
 
+# opt-in check: no_app_files_touched never runs by default, only when selected by ID
+GIT="git -C $SB -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false"
+$GIT commit -q -m base && $GIT branch -M main && $GIT checkout -q -b feat/app
+mkdir -p "$SB/SystemTurn/backend"; echo x > "$SB/SystemTurn/backend/x.java"
+$GIT add SystemTurn/backend/x.java && $GIT commit -q -m app
+out=$(run); N=$((N + 1))
+if echo "$out" | grep -q 'PASS no_sensitive_files_tracked' && ! echo "$out" | grep -q 'no_app_files_touched'; then echo "PASS no_app_files_touched_not_in_default_run"
+else echo "FAIL no_app_files_touched_not_in_default_run"; FAILS=$((FAILS + 1)); fi
+out=$(run no_app_files_touched); r=$?; N=$((N + 1))
+if [ $r -eq 1 ] && echo "$out" | grep -q 'SystemTurn/backend/x.java'; then echo "PASS no_app_files_touched_selectable_by_id"
+else echo "FAIL no_app_files_touched_selectable_by_id (exit $r)"; FAILS=$((FAILS + 1)); fi
+$GIT checkout -q main && $GIT checkout -q -b feat/infra
+echo y > "$SB/SystemTurn/infra/y.txt"; $GIT add SystemTurn/infra/y.txt && $GIT commit -q -m infra
+expect infra_only_branch_passes_by_id 0 -- no_app_files_touched
+
+# terraform-test-all.sh --guard: a directory that reports 0 passed must fail and be named
+TTA=$HERE/terraform-test-all.sh
+printf 'Success! 0 passed, 0 failed.\n' > "$SB/zero.txt"; printf 'Success! 3 passed, 0 failed.\n' > "$SB/three.txt"
+out=$(bash "$TTA" --guard SystemTurn/infra/x "$SB/zero.txt" 2>&1); r=$?; N=$((N + 1))
+if [ $r -eq 1 ] && echo "$out" | grep -q 'FAIL SystemTurn/infra/x'; then echo "PASS zero_passed_directory_fails"
+else echo "FAIL zero_passed_directory_fails (exit $r)"; FAILS=$((FAILS + 1)); fi
+bash "$TTA" --guard SystemTurn/infra/x "$SB/three.txt" >/dev/null 2>&1; r=$?; N=$((N + 1))
+if [ $r -eq 0 ]; then echo "PASS passed_directory_succeeds"; else echo "FAIL passed_directory_succeeds (exit $r)"; FAILS=$((FAILS + 1)); fi
+
 echo "ran=$N failed=$FAILS"
 [ "$N" -gt 0 ] && [ "$FAILS" -eq 0 ]
