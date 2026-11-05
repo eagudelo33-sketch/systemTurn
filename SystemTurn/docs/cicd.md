@@ -48,7 +48,7 @@ The apply role trusts only `repo:<repo>:environment:prod`, so no other job can a
 
 ## 5. Branch protection
 
-Require these checks on `main`: `static`, and (after the app CI change lands) `backend`, `frontend`, `e2e`. Do **not** require `plan`: it is skipped for forks and until `AWS_PLAN_ENABLED` is set, and a skipped required check blocks merging.
+Require these checks on `main`: `static`, and (after the app CI change lands) `backend`, `frontend`, `e2e`. Do **not** require `plan` yet: it is skipped for forks and until `AWS_PLAN_ENABLED` is set (GitHub counts a job skipped by its `if` as passing, so requiring it proves nothing), and once enabled it would make every merge depend on AWS being reachable.
 
 ## 6. Fork PRs and plan logs
 
