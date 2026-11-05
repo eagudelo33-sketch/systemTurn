@@ -26,7 +26,7 @@ All specs, with requirement counts and the tests that prove them: [specs index](
 | Database | ✅ PostgreSQL in production, H2 file for local `dev`; data survives restarts |
 | Operations | ✅ Env-driven config, startup guards, health probes that ignore the DB, fast `503`, graceful shutdown |
 | Infrastructure | ✅ Terraform foundation, network module and app module (ECS, RDS, ALB, CloudFront), verified offline. `dev` applies the network only (~$0); the paid app layer is off behind `enable_app`. `prod` not wired yet. ⏳ First real `apply` is manual. CI: `.github/workflows/infra.yml` runs offline checks on every PR; AWS plan/apply stay off until you follow [cicd.md](cicd.md) |
-| Frontend tests | ✅ Vitest (19: service layer + advisor panel states) + Playwright browser tests (18) covering both views, including conflict, stale-ticket, loading, empty-queue and refresh-failure states and a mocked advisor 503 (not a full-stack 503). ⚠️ No component tests for the views |
+| Frontend tests | ✅ Vitest (19: service layer + advisor panel states) + Playwright browser tests (18) covering both views, including conflict, stale-ticket, loading, empty-queue and refresh-failure states and a mocked advisor 503 (the real full-stack 503 is proved in the backend, `DatabaseOutageFullStackTest`). Both suites run in CI (`ci.yml`). ⚠️ No component tests for the views |
 | Live updates | ❌ Manual refresh |
 | Client keeps their ticket after a refresh | ❌ Ticket lives only in React state |
 | Authentication | ❌ Anyone can call "next" or cancel any ticket |
@@ -41,7 +41,7 @@ All specs, with requirement counts and the tests that prove them: [specs index](
 | 4 | `infra-network-app` | ✅ Done | VPC module (3 tiers, 2 AZs, `nat_mode`), app module (ECR, ECS Fargate, ALB, RDS PostgreSQL, S3 + CloudFront), wired into `dev` behind `enable_app`. `prod` wiring deferred |
 | 5 | `e2e-browser-tests` | ✅ Done | Playwright suite: 13 browser tests over both views, real backend + mocked error responses |
 | 6 | `ux-error-states` | ✅ Done | Honest error and stale states: the advisor never shows an unknown state as connected or empty; a ticket the server no longer has is cleared |
-| 7 | `infra-cicd` | 🚧 In progress | GitHub Actions with OIDC: credential-free infra checks, plan on same-repo PRs, manual prod approval ([cicd.md](cicd.md)). The workflow is delivered; the app CI (`ci.yml`) and the full-stack 503 test are still to come |
+| 7 | `infra-cicd` | ✅ Done (PR #9–#11) | GitHub Actions with OIDC: credential-free infra checks, plan on same-repo PRs, manual prod approval, plus the app CI (`ci.yml`: backend with Docker, frontend, Playwright e2e) and a full-stack 503 test that needs no Docker ([cicd.md](cicd.md)) |
 | 7b | `infra-prod-wiring` | Planned | Wire `prod` (`nat_mode = "per_az"`, deletion protection, final snapshot), first real apply, `/api/*`, SPA rewrite and ALB prefix-list tests |
 | 8 | `client-identity` | Planned (can slot in earlier) | `GET /turnos/{id}`, ticket kept in the browser, ISO times and state codes, component tests |
 | 9 | `wait-estimate` | Planned | Per-ticket wait estimate |
@@ -87,8 +87,8 @@ These come from the archive reports. Each one must be handled by the change that
 
 | Change | Must do |
 |--------|---------|
-| `infra-prod-wiring` | Carried from `infra-network-app`: prove the region and `default_tags` on a real resource in `plan` (still proven only through outputs); bump the tflint AWS plugin to 0.50.0 (allowed from 2026-11-06); keep pool size × tasks < `max_connections` when raising `app_desired_count` (documented, not enforced); add tests for the `/api/*` behavior, SPA rewrite and ALB prefix-list rule; wire `prod` (`nat_mode = "per_az"`, deletion protection, final snapshot); confirm the first real assume-role and plan, and the Linux provider hashes ([cicd.md](cicd.md)). The `no_app_files_touched` check is already opt-in (done in `infra-cicd`) |
-| `infra-cicd` (still open) | Done: convention checks, `terraform test` failing on "0 passed", tflint and trivy in `infra.yml`; lock files are never deleted before pre-commit; `no_app_files_touched` is now opt-in. Left: `./mvnw test -DrequireDocker=true`, a full-stack 503 test, keep the PostgreSQL suite sequential (one shared container), and `npm run e2e` on Linux (`npx playwright install --with-deps chromium`; upload `playwright-report/` and `test-results/`) in `ci.yml` |
+| `infra-prod-wiring` | Carried from `infra-network-app`: prove the region and `default_tags` on a real resource in `plan` (still proven only through outputs); bump the tflint AWS plugin to 0.49.0 → 0.50.0 (allowed from 2026-11-06; task 6.2 of `infra-cicd`, intentionally not done on 2026-11-05: verify the release date with `gh api` first); keep pool size × tasks < `max_connections` when raising `app_desired_count` (documented, not enforced); add tests for the `/api/*` behavior, SPA rewrite and ALB prefix-list rule; wire `prod` (`nat_mode = "per_az"`, deletion protection, final snapshot); confirm the first real assume-role and plan, and the Linux provider hashes ([cicd.md](cicd.md)). The `no_app_files_touched` check is already opt-in (done in `infra-cicd`) |
+| `infra-cicd` (done) | Delivered: convention checks, `terraform test` failing on "0 passed", tflint and trivy in `infra.yml`, `no_app_files_touched` opt-in, `ci.yml` with `./mvnw test -DrequireDocker=true`, `npm run e2e` on Linux (report and traces uploaded) and a full-stack 503 test. Left for later: keep the PostgreSQL suite sequential (one shared container) if it grows |
 | `client-identity` | Upgrade the stale-ticket browser test to a true stored-ticket test once persistence exists; fix the AM/PM position bug via ISO times; show the `503` message in the views |
 
 ## Docs, specs and archive

@@ -316,6 +316,40 @@ repo_workflows_pass_hygiene() {
   fi
 }
 
+# --- ci.yml checks (application CI): red until .github/workflows/ci.yml exists ---
+WFC=.github/workflows/ci.yml
+cjob() { need "$WFC" || return 1; job "$WFC" "$1" | grep -q . || fail "$WFC: no job $1" || return 1; job "$WFC" "$1"; }
+linux_runner() { grep -qE 'runs-on:[[:space:]]*ubuntu-'; }
+backend_requires_docker() {
+  local j; j=$(cjob backend) || { echo "$j"; return 1; }
+  echo "$j" | grep -qE 'mvnw.* test( .*)? -DrequireDocker=true' || fail "backend job does not run tests with -DrequireDocker=true" || return 1
+  echo "$j" | linux_runner || fail "backend job must run on an ubuntu runner (Docker available)"
+}
+frontend_runs_lint_test_build() {
+  local j s; j=$(cjob frontend) || { echo "$j"; return 1; }
+  for s in 'npm ci' 'npm run lint' 'npm test' 'npm run build'; do
+    echo "$j" | grep -qE "run:[[:space:]]*$s([[:space:]]|\$)" || fail "frontend job lacks step: $s" || return 1
+  done
+}
+e2e_uploads_report_on_failure() {
+  local j up; j=$(cjob e2e) || { echo "$j"; return 1; }
+  echo "$j" | linux_runner || fail "e2e job must run on an ubuntu runner" || return 1
+  echo "$j" | grep -q 'npm run e2e' || fail "e2e job does not run npm run e2e" || return 1
+  up=$(echo "$j" | awk '/^      - /{if (blk ~ /upload-artifact@/) print blk; blk=""} {blk = blk $0 "\n"} END {if (blk ~ /upload-artifact@/) print blk}')
+  [ -n "$up" ] || fail "e2e job has no upload-artifact step" || return 1
+  echo "$up" | grep -qE 'if:[[:space:]]*(\$\{\{[[:space:]]*)?(always\(\)|!cancelled\(\))' || fail "upload-artifact step must run on failure (always() or !cancelled())" || return 1
+  echo "$up" | grep -q 'playwright-report' && echo "$up" | grep -q 'test-results' || fail "upload must include playwright-report/ and test-results/"
+}
+ci_uses_no_secrets_or_id_token() {
+  need "$WFC" || return 1
+  ! nocomment "$WFC" | grep -nE 'secrets\.|id-token|configure-aws-credentials|environment:' || fail "$WFC must not use secrets, id-token, AWS credentials or environments"
+}
+ci_triggers_pull_request_and_main() {
+  need "$WFC" || return 1
+  top_block "$WFC" on | grep -qE '^[[:space:]]+pull_request:' && top_block "$WFC" on | grep -qE '^[[:space:]]+push:'     && top_block "$WFC" on | grep -qE 'branches:[[:space:]]*\[main\]' \
+    || fail "$WFC must trigger on pull_request and push to main"
+}
+
 ALL_CHECKS=(
   state_and_plan_files_ignored real_tfvars_and_backend_ignored examples_and_locks_not_ignored gitattributes_forces_lf
   no_sensitive_files_tracked tracked_infra_files_have_no_crlf no_account_id_in_tracked_infra_files
@@ -330,6 +364,8 @@ ALL_CHECKS=(
   plan_job_gated_for_same_repo plan_uses_lock_false_and_secrets apply_prod_only_manual_on_main
   apply_role_isolated_to_apply_prod fork_pr_reaches_only_credential_free_jobs repo_identity_not_hardcoded
   repo_workflows_pass_hygiene
+  backend_requires_docker frontend_runs_lint_test_build e2e_uploads_report_on_failure ci_uses_no_secrets_or_id_token
+  ci_triggers_pull_request_and_main
 )
 
 # Opt-in checks are valid IDs but never part of the default run (they depend on branch state).

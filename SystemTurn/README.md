@@ -161,6 +161,18 @@ Las pruebas del backend (147) incluyen un grupo que corre contra un PostgreSQL r
 
 Estos comandos ejecutan las pruebas, validan el código y comprueban que la aplicación pueda compilarse correctamente.
 
+## Integración continua (CI)
+
+GitHub Actions ejecuta el flujo `ci` (`.github/workflows/ci.yml`) en cada pull request y en cada push a `main`, sin filtros de ruta y sin secretos:
+
+| Job | Qué ejecuta |
+|-----|-------------|
+| `backend` | `./mvnw test -DrequireDocker=true` (Java 17, con Docker, incluidas las pruebas de PostgreSQL) |
+| `frontend` | `npm ci`, `npm run lint`, `npm test` y `npm run build` |
+| `e2e` | Pruebas de Playwright en Chromium; sube `playwright-report/` y `test-results/` como artefacto, también cuando fallan |
+
+Los cambios de infraestructura tienen su propio flujo (`infra`). Más detalle, protección de ramas y mantenimiento de versiones fijadas: [`docs/cicd.md`](docs/cicd.md).
+
 
 <img width="1536" height="1024" alt="imagen" src="https://github.com/user-attachments/assets/ceab91b4-187f-4e29-a54a-0593e1299aa2" />
 
