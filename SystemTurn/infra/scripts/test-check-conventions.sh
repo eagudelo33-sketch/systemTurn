@@ -27,8 +27,20 @@ expect staged_tfstate_is_caught 1 -- no_sensitive_files_tracked
 git -C "$SB" rm -q -f --cached SystemTurn/infra/envs/dev/x.tfstate
 expect unstaged_again_passes 0 -- no_sensitive_files_tracked
 
+# workflow fixtures are staged in the sandbox index; wf NAME reads the file body from stdin
+SHA=$(printf 'a%.0s' {1..40})
+wf() { mkdir -p "$SB/.github/workflows"; cat > "$SB/.github/workflows/$1"; git -C "$SB" add ".github/workflows/$1"; }
+unwf() { git -C "$SB" rm -q -f --cached ".github/workflows/$1"; rm -f "$SB/.github/workflows/$1"; }
+good_wf() { # good_wf [PERMISSIONS_BLOCK] [STEP_LINE]: a workflow that passes every hygiene check
+  printf 'name: t\non: [pull_request]\n%s\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: %s\n' \
+    "${1:-permissions:
+  contents: read}" "${2:-actions/checkout@$SHA}"
+}
+expect no_workflows_fails 1 -- actions_pinned_to_sha
+good_wf | wf ok.yml
+
 # (ii) repo selection: identical output and exit from the root and from a nested env dir
-IDS="state_and_plan_files_ignored real_tfvars_and_backend_ignored examples_and_locks_not_ignored gitattributes_forces_lf"
+IDS="state_and_plan_files_ignored real_tfvars_and_backend_ignored examples_and_locks_not_ignored gitattributes_forces_lf actions_pinned_to_sha"
 CWD=. run $IDS > "$SB/out_root.txt"; r1=$?
 CWD=SystemTurn/infra/envs/dev run $IDS > "$SB/out_dev.txt"; r2=$?
 N=$((N + 1))
@@ -64,6 +76,44 @@ expect prevent_destroy_false_fails 1 -- bucket_declares_prevent_destroy
 printf 'resource "aws_s3_bucket" "s" {\n  tags = {\n  }\n  lifecycle {\n    prevent_destroy = true\n  }\n}\n' > "$B/main.tf"
 expect prevent_destroy_true_passes 0 -- bucket_declares_prevent_destroy
 
+# workflow hygiene: each rule fails on a violating fixture (naming file and line) and passes on a good one
+good_wf 'permissions:
+  contents: read' 'actions/checkout@v4' | wf t.yml
+out=$(run actions_pinned_to_sha); r=$?; N=$((N + 1))
+if [ $r -eq 1 ] && echo "$out" | grep -q 't.yml:.*checkout@v4'; then echo "PASS actions_pinned_to_sha_tag_fails"
+else echo "FAIL actions_pinned_to_sha_tag_fails (exit $r)"; FAILS=$((FAILS + 1)); fi
+good_wf | wf t.yml
+expect actions_pinned_to_sha_sha_passes 0 -- actions_pinned_to_sha
+good_wf 'permissions:
+  contents: read' './local-action' | wf t.yml
+expect actions_pinned_to_sha_local_path_exempt 0 -- actions_pinned_to_sha
+good_wf '# permissions: write-all' | wf t.yml
+expect top_level_permissions_missing_fails 1 -- top_level_permissions_declared
+good_wf 'permissions: write-all' | wf t.yml
+expect top_level_permissions_write_all_fails 1 -- top_level_permissions_declared
+good_wf 'permissions:
+  contents: write' | wf t.yml
+expect top_level_permissions_write_scope_fails 1 -- top_level_permissions_declared
+good_wf 'permissions:
+  contents: read' | wf t.yml
+expect top_level_permissions_read_passes 0 -- top_level_permissions_declared
+printf 'name: t\npermissions:\n  contents: read\non:\n  pull_request_target:\njobs: {}\n' | wf t.yml
+expect pull_request_target_forbidden 1 -- pull_request_target_forbidden
+printf 'name: t\npermissions:\n  contents: read\non: [pull_request] # not pull_request_target\n# pull_request_target\njobs: {}\n' | wf t.yml
+expect pull_request_target_commented_out_passes 0 -- pull_request_target_forbidden
+good_wf 'permissions:
+  contents: read
+  id-token: write' | wf t.yml
+expect id_token_at_top_level_fails 1 -- id_token_scoped_to_aws_jobs
+good_wf | wf t.yml
+printf '    permissions:\n      id-token: write\n' >> "$SB/.github/workflows/t.yml"; git -C "$SB" add .github/workflows/t.yml
+expect id_token_on_non_aws_job_fails 1 -- id_token_scoped_to_aws_jobs
+good_wf 'permissions:
+  contents: read' "aws-actions/configure-aws-credentials@$SHA" | wf t.yml
+printf '    permissions:\n      id-token: write\n' >> "$SB/.github/workflows/t.yml"; git -C "$SB" add .github/workflows/t.yml
+expect id_token_on_aws_job_passes 0 -- id_token_scoped_to_aws_jobs
+unwf t.yml
+
 # opt-in check: no_app_files_touched never runs by default, only when selected by ID
 GIT="git -C $SB -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false"
 $GIT commit -q -m base && $GIT branch -M main && $GIT checkout -q -b feat/app
@@ -87,6 +137,31 @@ if [ $r -eq 1 ] && echo "$out" | grep -q 'FAIL SystemTurn/infra/x'; then echo "P
 else echo "FAIL zero_passed_directory_fails (exit $r)"; FAILS=$((FAILS + 1)); fi
 bash "$TTA" --guard SystemTurn/infra/x "$SB/three.txt" >/dev/null 2>&1; r=$?; N=$((N + 1))
 if [ $r -eq 0 ]; then echo "PASS passed_directory_succeeds"; else echo "FAIL passed_directory_succeeds (exit $r)"; FAILS=$((FAILS + 1)); fi
+
+# infra.yml checks: the committed file passes; each mutation of a safeguard is caught by the matching check
+INFRA_CHECKS="static_job_has_no_credentials static_job_runs_all_gates no_path_filters_and_concurrency plan_job_gated_for_same_repo plan_uses_lock_false_and_secrets apply_prod_only_manual_on_main apply_role_isolated_to_apply_prod fork_pr_reaches_only_credential_free_jobs"
+unwf ok.yml
+cp "$TTA" "$SB/SystemTurn/infra/scripts/"; git -C "$SB" add SystemTurn/infra/scripts/terraform-test-all.sh
+cp "$REPO/.github/workflows/infra.yml" "$SB/.github/workflows/infra.yml" 2>/dev/null; git -C "$SB" add .github/workflows/infra.yml 2>/dev/null
+expect committed_infra_yml_passes_infra_checks 0 -- $INFRA_CHECKS
+mutate() { # mutate NAME CHECK_ID FILTER...: apply FILTER (reads the real infra.yml) and expect CHECK_ID to fail
+  local name=$1 id=$2; shift 2
+  "$@" "$REPO/.github/workflows/infra.yml" > "$SB/.github/workflows/infra.yml" 2>/dev/null; git -C "$SB" add .github/workflows/infra.yml
+  expect "$name" 1 -- "$id"
+}
+mutate plan_without_lock_false_fails plan_uses_lock_false_and_secrets sed 's/ -lock=false//'
+mutate plan_with_literal_role_fails plan_uses_lock_false_and_secrets sed 's/secrets\.AWS_PLAN_ROLE_ARN/"arn:aws:iam::123456789012:role\/x"/'
+mutate plan_without_fork_gate_fails plan_job_gated_for_same_repo sed 's/github\.event\.pull_request\.head\.repo\.full_name == github\.repository/true/'
+mutate plan_without_fork_gate_reaches_forks fork_pr_reaches_only_credential_free_jobs sed 's/github\.event\.pull_request\.head\.repo\.full_name == github\.repository/true/'
+mutate plan_without_variable_gate_fails plan_job_gated_for_same_repo sed "s/vars\.AWS_PLAN_ENABLED == 'true'/true/"
+mutate static_with_secret_fails static_job_has_no_credentials sed 's/\${{ github\.token }}/${{ secrets.GITHUB_TOKEN }}/'
+mutate static_without_actionlint_fails static_job_runs_all_gates sed 's/actionlint -color/true/'
+mutate apply_prod_on_any_ref_fails apply_prod_only_manual_on_main sed "s/github\.ref == 'refs\/heads\/main'/true/"
+mutate apply_prod_without_environment_fails apply_prod_only_manual_on_main sed 's/environment: prod/environment: staging/'
+mutate prod_environment_leaks_to_static_fails apply_role_isolated_to_apply_prod awk '{print} /^  static:/{print "    environment: prod"}'
+mutate path_filter_fails no_path_filters_and_concurrency awk '{print} /^  pull_request:/{print "    paths: [\"a\"]"}'
+mutate missing_concurrency_fails no_path_filters_and_concurrency sed 's/^concurrency:/x-concurrency:/'
+git -C "$SB" rm -q -f --cached .github/workflows/infra.yml; rm -f "$SB/.github/workflows/infra.yml"
 
 echo "ran=$N failed=$FAILS"
 [ "$N" -gt 0 ] && [ "$FAILS" -eq 0 ]
