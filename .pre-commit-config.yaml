@@ -24,6 +24,8 @@ repos:
       - id: terraform_trivy
         files: ^SystemTurn/infra/
         args:
+          # One directory at a time: parallel trivy runs race on the shared checks-bundle cache when it is cold (seen in CI).
+          - --hook-config=--parallelism-limit=1
           - --args=--config=__GIT_WORKING_DIR__/trivy.yaml
           - --args=--ignorefile=__GIT_WORKING_DIR__/.trivyignore
 
