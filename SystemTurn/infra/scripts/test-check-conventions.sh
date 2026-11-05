@@ -161,6 +161,29 @@ mutate apply_prod_without_environment_fails apply_prod_only_manual_on_main sed '
 mutate prod_environment_leaks_to_static_fails apply_role_isolated_to_apply_prod awk '{print} /^  static:/{print "    environment: prod"}'
 mutate path_filter_fails no_path_filters_and_concurrency awk '{print} /^  pull_request:/{print "    paths: [\"a\"]"}'
 mutate missing_concurrency_fails no_path_filters_and_concurrency sed 's/^concurrency:/x-concurrency:/'
+
+# ci.yml checks: the committed file passes; each mutation of a safeguard is caught by the matching check
+CI_CHECKS="backend_requires_docker frontend_runs_lint_test_build e2e_uploads_report_on_failure ci_uses_no_secrets_or_id_token ci_triggers_pull_request_and_main no_path_filters_and_concurrency fork_pr_reaches_only_credential_free_jobs"
+cp "$REPO/.github/workflows/infra.yml" "$SB/.github/workflows/infra.yml" 2>/dev/null; git -C "$SB" add .github/workflows/infra.yml 2>/dev/null
+cp "$REPO/.github/workflows/ci.yml" "$SB/.github/workflows/ci.yml" 2>/dev/null; git -C "$SB" add .github/workflows/ci.yml 2>/dev/null
+expect committed_ci_yml_passes_ci_checks 0 -- $CI_CHECKS
+cmutate() { # cmutate NAME CHECK_ID FILTER...: apply FILTER (reads the real ci.yml) and expect CHECK_ID to fail
+  local name=$1 id=$2; shift 2
+  "$@" "$REPO/.github/workflows/ci.yml" > "$SB/.github/workflows/ci.yml" 2>/dev/null; git -C "$SB" add .github/workflows/ci.yml
+  expect "$name" 1 -- "$id"
+}
+cmutate backend_without_require_docker_fails backend_requires_docker sed 's/ -DrequireDocker=true//'
+cmutate backend_on_macos_fails backend_requires_docker sed 's/ubuntu-latest/macos-latest/'
+cmutate frontend_without_lint_fails frontend_runs_lint_test_build sed 's/npm run lint/true/'
+cmutate frontend_without_build_fails frontend_runs_lint_test_build sed 's/npm run build/true/'
+cmutate e2e_upload_only_on_success_fails e2e_uploads_report_on_failure sed 's/if: \${{ !cancelled() }}/if: success()/'
+cmutate e2e_upload_without_test_results_fails e2e_uploads_report_on_failure sed '/test-results\//d'
+cmutate ci_with_secret_fails ci_uses_no_secrets_or_id_token awk '{print} /^  backend:/{print "    env: { X: ${{ secrets.X }} }"}'
+cmutate ci_with_id_token_fails ci_uses_no_secrets_or_id_token awk '{print} /^  backend:/{print "    permissions: { id-token: write }"}'
+cmutate ci_without_push_trigger_fails ci_triggers_pull_request_and_main sed 's/^  push:/  x-push:/'
+cmutate ci_path_filter_fails no_path_filters_and_concurrency awk '{print} /^  pull_request:/{print "    paths: [\"a\"]"}'
+cmutate ci_job_gated_on_head_repo_fails fork_pr_reaches_only_credential_free_jobs awk '{print} /^  backend:/{print "    if: github.event.pull_request.head.repo.full_name == github.repository"}'
+git -C "$SB" rm -q -f --cached .github/workflows/ci.yml; rm -f "$SB/.github/workflows/ci.yml"
 git -C "$SB" rm -q -f --cached .github/workflows/infra.yml; rm -f "$SB/.github/workflows/infra.yml"
 
 echo "ran=$N failed=$FAILS"
