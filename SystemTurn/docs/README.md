@@ -13,7 +13,7 @@ This page is the map. Read it first; it points you to the one document or spec y
 | Demo data | [app.md → Business rules](app.md#business-rules) | [demo-seed](../openspec/specs/demo-seed/spec.md) | `.../infrastructure/DemoSeedRunner.java` |
 | Running in production: config, startup guards, health, 503, shutdown | [app.md → Configuration and operations](app.md#configuration-and-operations) | [runtime-operations](../openspec/specs/runtime-operations/spec.md) | `application.yml`, `StartupGuard.java` |
 | Client and advisor screens | [app.md → Frontend](app.md#frontend) | [concurrency-conflicts](../openspec/specs/concurrency-conflicts/spec.md) (service mapping, conflict reactions), [browser-e2e](../openspec/specs/browser-e2e/spec.md) | `frontend/frontend-react/react-client/src` |
-| AWS infrastructure (Terraform): what exists, cost, on/off switch | [infra.md](infra.md), [infra-onboarding.md](infra-onboarding.md) (runbook) | [infra-network](../openspec/specs/infra-network/spec.md), [infra-app](../openspec/specs/infra-app/spec.md), [infra-environments](../openspec/specs/infra-environments/spec.md), [infra-cost-guardrails](../openspec/specs/infra-cost-guardrails/spec.md), [infra-state-backend](../openspec/specs/infra-state-backend/spec.md), [infra-repo-conventions](../openspec/specs/infra-repo-conventions/spec.md) | `infra/` |
+| AWS infrastructure (Terraform): what exists, cost, on/off switch | [infra.md](infra.md), [infra-onboarding.md](infra-onboarding.md) (runbook), [cicd.md](cicd.md) (GitHub Actions, OIDC, prod approval) | [infra-network](../openspec/specs/infra-network/spec.md), [infra-app](../openspec/specs/infra-app/spec.md), [infra-environments](../openspec/specs/infra-environments/spec.md), [infra-cost-guardrails](../openspec/specs/infra-cost-guardrails/spec.md), [infra-state-backend](../openspec/specs/infra-state-backend/spec.md), [infra-repo-conventions](../openspec/specs/infra-repo-conventions/spec.md) | `infra/` |
 
 All specs, with requirement counts and the tests that prove them: [specs index](../openspec/specs/README.md). Why something changed: [change archive](../openspec/changes/archive/). How to run it in Spanish: [../README.md](../README.md).
 
@@ -25,7 +25,7 @@ All specs, with requirement counts and the tests that prove them: [specs index](
 | Advisor and client views | ✅ Working against the real API |
 | Database | ✅ PostgreSQL in production, H2 file for local `dev`; data survives restarts |
 | Operations | ✅ Env-driven config, startup guards, health probes that ignore the DB, fast `503`, graceful shutdown |
-| Infrastructure | ✅ Terraform foundation, network module and app module (ECS, RDS, ALB, CloudFront), verified offline. `dev` applies the network only (~$0); the paid app layer is off behind `enable_app`. `prod` not wired yet. ⏳ First real `apply` is manual |
+| Infrastructure | ✅ Terraform foundation, network module and app module (ECS, RDS, ALB, CloudFront), verified offline. `dev` applies the network only (~$0); the paid app layer is off behind `enable_app`. `prod` not wired yet. ⏳ First real `apply` is manual. CI: `.github/workflows/infra.yml` runs offline checks on every PR; AWS plan/apply stay off until you follow [cicd.md](cicd.md) |
 | Frontend tests | ✅ Vitest (19: service layer + advisor panel states) + Playwright browser tests (18) covering both views, including conflict, stale-ticket, loading, empty-queue and refresh-failure states and a mocked advisor 503 (not a full-stack 503). ⚠️ No component tests for the views |
 | Live updates | ❌ Manual refresh |
 | Client keeps their ticket after a refresh | ❌ Ticket lives only in React state |
@@ -41,7 +41,8 @@ All specs, with requirement counts and the tests that prove them: [specs index](
 | 4 | `infra-network-app` | ✅ Done | VPC module (3 tiers, 2 AZs, `nat_mode`), app module (ECR, ECS Fargate, ALB, RDS PostgreSQL, S3 + CloudFront), wired into `dev` behind `enable_app`. `prod` wiring deferred |
 | 5 | `e2e-browser-tests` | ✅ Done | Playwright suite: 13 browser tests over both views, real backend + mocked error responses |
 | 6 | `ux-error-states` | ✅ Done | Honest error and stale states: the advisor never shows an unknown state as connected or empty; a ticket the server no longer has is cleared |
-| 7 | `infra-cicd` | ⏭️ Next | GitHub Actions with OIDC, plan on PR, manual prod approval |
+| 7 | `infra-cicd` | 🚧 In progress | GitHub Actions with OIDC: credential-free infra checks, plan on same-repo PRs, manual prod approval ([cicd.md](cicd.md)). The workflow is delivered; the app CI (`ci.yml`) and the full-stack 503 test are still to come |
+| 7b | `infra-prod-wiring` | Planned | Wire `prod` (`nat_mode = "per_az"`, deletion protection, final snapshot), first real apply, `/api/*`, SPA rewrite and ALB prefix-list tests |
 | 8 | `client-identity` | Planned (can slot in earlier) | `GET /turnos/{id}`, ticket kept in the browser, ISO times and state codes, component tests |
 | 9 | `wait-estimate` | Planned | Per-ticket wait estimate |
 | 10 | `live-updates` | Planned | WebSocket push to both views |
@@ -78,7 +79,7 @@ All specs, with requirement counts and the tests that prove them: [specs index](
 | Dead code: `turnosSimulation.js` | P3 | any change touching the frontend |
 | No Postman collection or OpenAPI file for the API | P3 | — |
 | No pagination on the dashboard; single advisor, no desk number; no reports | P3 | — |
-| AWS edge: ALB is HTTP only (no ACM), no WAF, no CloudFront-to-ALB secret header, no WebSocket path; `prod` not wired; nothing applied to a real account | P1 before a public deploy | `infra-cicd`, `live-updates`, a prod wiring change |
+| AWS edge: ALB is HTTP only (no ACM), no WAF, no CloudFront-to-ALB secret header, no WebSocket path; `prod` not wired; nothing applied to a real account | P1 before a public deploy | `infra-prod-wiring`, `live-updates` |
 
 ## Obligations carried into upcoming changes
 
@@ -86,8 +87,8 @@ These come from the archive reports. Each one must be handled by the change that
 
 | Change | Must do |
 |--------|---------|
-| next infra change | Carried from `infra-network-app`: prove the region and `default_tags` on a real resource in `plan` (still proven only through outputs); bump the tflint AWS plugin to 0.50.0 (allowed from 2026-11-06); keep pool size × tasks < `max_connections` when raising `app_desired_count` (documented, not enforced); add tests for the `/api/*` behavior, SPA rewrite and ALB prefix-list rule; wire `prod` (`nat_mode = "per_az"`, deletion protection, final snapshot); remove or scope the `no_app_files_touched` convention check (a change-scoped rule from `infra-foundation` encoded as a permanent check: it fails every branch that touches `frontend/` or `backend/`) via a MODIFIED delta on `infra-repo-conventions` |
-| `infra-cicd` | Run `./mvnw test -DrequireDocker=true`; a full-stack 503 test; keep the PostgreSQL suite sequential (one shared container); run `check-conventions.sh`, `terraform test` (fail on "0 passed"), tflint and trivy; never delete lock files before pre-commit; run `npm run e2e` on Linux (`npx playwright install --with-deps chromium`; upload `playwright-report/` and `test-results/`) |
+| `infra-prod-wiring` | Carried from `infra-network-app`: prove the region and `default_tags` on a real resource in `plan` (still proven only through outputs); bump the tflint AWS plugin to 0.50.0 (allowed from 2026-11-06); keep pool size × tasks < `max_connections` when raising `app_desired_count` (documented, not enforced); add tests for the `/api/*` behavior, SPA rewrite and ALB prefix-list rule; wire `prod` (`nat_mode = "per_az"`, deletion protection, final snapshot); confirm the first real assume-role and plan, and the Linux provider hashes ([cicd.md](cicd.md)). The `no_app_files_touched` check is already opt-in (done in `infra-cicd`) |
+| `infra-cicd` (still open) | Done: convention checks, `terraform test` failing on "0 passed", tflint and trivy in `infra.yml`; lock files are never deleted before pre-commit; `no_app_files_touched` is now opt-in. Left: `./mvnw test -DrequireDocker=true`, a full-stack 503 test, keep the PostgreSQL suite sequential (one shared container), and `npm run e2e` on Linux (`npx playwright install --with-deps chromium`; upload `playwright-report/` and `test-results/`) in `ci.yml` |
 | `client-identity` | Upgrade the stale-ticket browser test to a true stored-ticket test once persistence exists; fix the AM/PM position bug via ISO times; show the `503` message in the views |
 
 ## Docs, specs and archive
