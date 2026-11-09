@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Repo-convention checks for SystemTurn/infra. Works in Git Bash and Linux; no AWS account needed.
-# Usage: check-conventions.sh [CHECK_ID...]   (default: all). Output label = spec scenario ID.
+# Usage: check-conventions.sh [CHECK_ID...]   (default: all except opt-in checks). Output label = spec scenario ID.
 # Exit 1 on any failure, unknown check ID, or when zero checks ran.
 set -u
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "FAIL not inside a git repository"; exit 1; }
@@ -194,7 +194,14 @@ ALL_CHECKS=(
   openspec_config_declares_infra_tests runbook_has_required_sections runbook_within_size_limit
 )
 
-SELECTED=("$@"); [ ${#SELECTED[@]} -gt 0 ] || SELECTED=("${ALL_CHECKS[@]}")
+# Opt-in checks are valid IDs but never part of the default run (they depend on branch state).
+OPT_IN_CHECKS=(no_app_files_touched)
+DEFAULT_CHECKS=()
+for id in "${ALL_CHECKS[@]}"; do
+  [[ " ${OPT_IN_CHECKS[*]} " == *" $id "* ]] || DEFAULT_CHECKS+=("$id")
+done
+
+SELECTED=("$@"); [ ${#SELECTED[@]} -gt 0 ] || SELECTED=("${DEFAULT_CHECKS[@]}")
 RAN=0
 for id in "${SELECTED[@]}"; do
   if ! [[ " ${ALL_CHECKS[*]} " == *" $id "* ]]; then echo "FAIL $id (unknown check)"; RC=1; continue; fi
