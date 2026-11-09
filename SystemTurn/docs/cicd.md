@@ -2,7 +2,7 @@
 
 Pull requests are checked by `.github/workflows/infra.yml` **without any AWS credentials**. A read-only `terraform plan` runs on same-repo PRs once you wire AWS. `prod` is applied only by hand, from `main`, after you approve it in GitHub. No long-lived AWS keys exist anywhere: GitHub exchanges a short-lived OIDC token for a role.
 
-Rules: the `infra-cicd` spec (linked from the specs index once archived) and [infra-repo-conventions](../openspec/specs/infra-repo-conventions/spec.md). Account setup first: [infra-onboarding.md](infra-onboarding.md).
+Rules: the [infra-cicd](../openspec/specs/infra-cicd/spec.md) spec and [infra-repo-conventions](../openspec/specs/infra-repo-conventions/spec.md). Account setup first: [infra-onboarding.md](infra-onboarding.md).
 
 ## 1. What runs and which credentials it has
 
@@ -11,6 +11,8 @@ Rules: the `infra-cicd` spec (linked from the specs index once archived) and [in
 | `static` | Every PR (forks too) and every push to `main` | None. Uses only the built-in `github.token` for the tflint plugin download |
 | `plan` (`dev`, `prod`) | Same-repo PR **and** repository variable `AWS_PLAN_ENABLED` is `true` | Role `systemturn-github-plan`: `ReadOnlyAccess` + read of the state bucket. Runs with `-lock=false`, so it cannot write state |
 | `apply-prod` | Manual run (`workflow_dispatch`) on `main`, after approval | Role `systemturn-github-apply`: only the `prod/` state objects |
+
+`ci.yml` (application CI) has three jobs with no secrets and no `id-token`, so they run for forks too: `backend` (`./mvnw test -DrequireDocker=true`), `frontend` (lint, test, build) and `e2e` (Playwright on Chromium, report and traces uploaded even on failure).
 
 `static` runs pre-commit on all files (fmt, validate, tflint, trivy, conventions), fails if a `.terraform.lock.hcl` changed, runs `terraform test` in all five directories (a directory reporting `0 passed` fails), and runs actionlint. Every tool is pinned: actions by commit SHA, tflint, trivy and actionlint by sha256.
 
@@ -48,7 +50,7 @@ The apply role trusts only `repo:<repo>:environment:prod`, so no other job can a
 
 ## 5. Branch protection
 
-Require these checks on `main`: `static`, and (after the app CI change lands) `backend`, `frontend`, `e2e`. Do **not** require `plan` yet: it is skipped for forks and until `AWS_PLAN_ENABLED` is set (GitHub counts a job skipped by its `if` as passing, so requiring it proves nothing), and once enabled it would make every merge depend on AWS being reachable.
+Require these checks on `main`: `static`, `backend`, `frontend` and `e2e` (the last three come from `ci.yml`). Do **not** require `plan` yet: it is skipped for forks and until `AWS_PLAN_ENABLED` is set (GitHub counts a job skipped by its `if` as passing, so requiring it proves nothing), and once enabled it would make every merge depend on AWS being reachable.
 
 ## 6. Fork PRs and plan logs
 
@@ -65,4 +67,3 @@ A fork PR gets only the credential-free jobs: `plan` is skipped for it and the w
 |------|-------|
 | Wire `prod` for real (the `plan` matrix already includes it) | `infra-prod-wiring` |
 | First real assume-role and plan; confirm Linux provider hashes | After secrets are set |
-| tflint AWS plugin 0.49.0 to 0.50.0 (allowed from 2026-11-06) | Next infra change |
