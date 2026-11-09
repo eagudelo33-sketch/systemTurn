@@ -67,4 +67,3 @@ A fork PR gets only the credential-free jobs: `plan` is skipped for it and the w
 |------|-------|
 | Wire `prod` for real (the `plan` matrix already includes it) | `infra-prod-wiring` |
 | First real assume-role and plan; confirm Linux provider hashes | After secrets are set |
-| tflint AWS plugin 0.49.0 to 0.50.0 (allowed from 2026-11-06) | Next infra change |
