@@ -2,7 +2,7 @@
 
 Pull requests are checked by `.github/workflows/infra.yml` **without any AWS credentials**. A read-only `terraform plan` runs on same-repo PRs once you wire AWS. `prod` is applied only by hand, from `main`, after you approve it in GitHub. No long-lived AWS keys exist anywhere: GitHub exchanges a short-lived OIDC token for a role.
 
-Rules: the `infra-cicd` spec (linked from the specs index once archived) and [infra-repo-conventions](../openspec/specs/infra-repo-conventions/spec.md). Account setup first: [infra-onboarding.md](infra-onboarding.md).
+Rules: the [infra-cicd](../openspec/specs/infra-cicd/spec.md) spec and [infra-repo-conventions](../openspec/specs/infra-repo-conventions/spec.md). Account setup first: [infra-onboarding.md](infra-onboarding.md).
 
 ## 1. What runs and which credentials it has
 

@@ -92,7 +92,7 @@ The application MUST expose only the `health` actuator endpoint over HTTP, with 
 - THEN each returns 404
 
 ### Requirement: Database outage returns 503
-When a request needs the database and it is unreachable (connection acquisition fails or times out), the API MUST fail fast and respond HTTP 503 with body `{"error":"SERVICIO_NO_DISPONIBLE","mensaje":"<friendly Spanish message>"}`, using the existing error shape. The response MUST NOT expose driver or SQL details. The 409 `CONFLICTO` and 400 `OPERACION_INVALIDA` behaviors MUST NOT change.
+When a request needs the database and it is unreachable (connection acquisition fails or times out), the API MUST fail fast and respond HTTP 503 with body `{"error":"SERVICIO_NO_DISPONIBLE","mensaje":"<friendly Spanish message>"}`, using the existing error shape. The response MUST NOT expose driver or SQL details. The 409 `CONFLICTO` and 400 `OPERACION_INVALIDA` behaviors MUST NOT change. This MUST also hold end to end: a real HTTP request traversing controller, service, JPA adapter and the Hikari pool against an unreachable database MUST yield the 503 contract, and that proof MUST run without Docker.
 
 #### Scenario: Solicitar with the database down
 - GIVEN the repository throws a connection-acquisition failure (`CannotGetJdbcConnectionException`)
@@ -114,6 +114,13 @@ When a request needs the database and it is unreachable (connection acquisition 
 - GIVEN the database host does not accept connections
 - WHEN a DB-dependent request is made
 - THEN the 503 is returned within the Hikari connection timeout plus 2 seconds
+
+#### Scenario: Full-stack outage returns 503 without Docker
+- GIVEN the application started on a random port with the real JPA adapter and Hikari pointed at an unreachable local port, with a short connection timeout
+- WHEN a real HTTP `POST /api/v1/turnos` and a queue `GET` are sent
+- THEN each response is 503 with `error` `SERVICIO_NO_DISPONIBLE` and a non-empty Spanish `mensaje`
+- AND the body contains neither `jdbc` nor the unreachable host/port
+- AND the test needs no Docker and passes under plain `./mvnw test`
 
 ### Requirement: Frontend 503 handling
 `turnosService.js` MUST map an HTTP 503 response with `error` `SERVICIO_NO_DISPONIBLE` to a thrown error whose message is the body `mensaje`. The advisor view's behavior on a 503 is specified in `browser-e2e` ("Mocked advisor service-unavailable recovery", "Honest advisor load states"). Client-view 503 handling remains out of scope here (deferred to `client-identity`); `browser-e2e` only guards that a refresh failure keeps the held ticket.

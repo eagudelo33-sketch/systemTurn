@@ -12,7 +12,7 @@ How specs change: a change writes *delta* specs under `openspec/changes/<change>
 | [ticket-persistence](ticket-persistence/spec.md) | Durable PostgreSQL storage, Flyway `V1` unchanged, domain isolated from persistence | 3 | 8 | `JpaTurnoRepository*Test`, `RestartSurvival*Test` |
 | [concurrency-conflicts](concurrency-conflicts/spec.md) | Unique daily numbers, optimistic locking, 409 `CONFLICTO`, engine-independent duplicate detection | 5 | 15 | `SolicitarConcurrency*Test`, `ConflictoHandlerTest`, `turnosService.test.js`, `e2e/03-respuestas-simuladas.spec.js` |
 | [demo-seed](demo-seed/spec.md) | CSV seed only under `demo` (+ `dev`), idempotent, atomic | 4 | 8 | `DemoSeedRunnerTest`, `DemoSeedAtomicityTest`, `StartupGuardTest` |
-| [runtime-operations](runtime-operations/spec.md) | Env-driven datasource, H2 guard, 503 `SERVICIO_NO_DISPONIBLE`, health probes without DB, graceful shutdown | 10 | 26 | `StartupGuardTest`, `HealthGroupsTest`, `GracefulShutdownTest`, `DatabaseDownFailFastTest` |
+| [runtime-operations](runtime-operations/spec.md) | Env-driven datasource, H2 guard, 503 `SERVICIO_NO_DISPONIBLE`, health probes without DB, graceful shutdown | 10 | 27 | `StartupGuardTest`, `HealthGroupsTest`, `GracefulShutdownTest`, `DatabaseDownFailFastTest` |
 
 ## Quality
 
@@ -29,9 +29,15 @@ How specs change: a change writes *delta* specs under `openspec/changes/<change>
 | [infra-environments](infra-environments/spec.md) | `dev` / `prod` roots: pinned versions, default tags, no credentials, partial backend; `dev` wires network + gated app, `prod` still empty | 6 | 13 | `envs/*/tests/env.tftest.hcl` |
 | [infra-network](infra-network/spec.md) | VPC 2 AZs x 3 tiers, `nat_mode` none/single/per_az, isolated data tier, free S3 endpoint, optional interface endpoints | 5 | 11 | `modules/network/tests/network.tftest.hcl` |
 | [infra-app](infra-app/spec.md) | ECR, RDS PostgreSQL 17 (RDS-managed secret), ECS Fargate (`desired_count` 0), ALB readiness check, least-privilege IAM, private SPA bucket behind CloudFront | 8 | 11 | `modules/app/tests/app.tftest.hcl` |
-| [infra-repo-conventions](infra-repo-conventions/spec.md) | Ignores, LF line endings, static gates, pre-commit, runbook | 7 | 18 | `infra/scripts/check-conventions.sh` |
+| [infra-repo-conventions](infra-repo-conventions/spec.md) | Ignores, LF line endings, static gates, pre-commit, runbook, workflow hygiene | 8 | 24 | `infra/scripts/check-conventions.sh` |
 
-**Total: 80 requirements, 175 scenarios.**
+## CI/CD (GitHub Actions)
+
+| Capability | What it guarantees | Req | Scenarios | Main tests |
+|------------|--------------------|-----|-----------|------------|
+| [infra-cicd](infra-cicd/spec.md) | Credential-free static gates in `infra.yml`; same-repo plan through a read-only OIDC role; manual `prod` apply from `main` only; app CI (`ci.yml`) with SHA-pinned actions, scoped permissions and credential-free fork PRs | 7 | 18 | `github_oidc.tftest.hcl`, `check-conventions.sh`, `terraform-test-all.sh` |
+
+**Total: 88 requirements, 200 scenarios.**
 
 ## Change history (archive)
 
@@ -43,6 +49,7 @@ How specs change: a change writes *delta* specs under `openspec/changes/<change>
 | 2026-11-04 | [infra-network-app](../changes/archive/2026-11-04-infra-network-app/) | infra-network, infra-app (new); infra-environments, infra-cost-guardrails (modified) |
 | 2026-11-04 | [e2e-browser-tests](../changes/archive/2026-11-04-e2e-browser-tests/) | browser-e2e (new); concurrency-conflicts, daily-queue (modified: the 3 view scenarios deferred by `persistence-daily-queue` are now proven) |
 | 2026-11-04 | [ux-error-states](../changes/archive/2026-11-04-ux-error-states/) | browser-e2e (2 modified, 3 added), daily-queue (1 modified, 1 added), runtime-operations (1 modified note): honest advisor load states, typed `TURNO_NO_ENCONTRADO`, client keeps its ticket on 503 |
+| 2026-11-09 | [infra-cicd](../changes/archive/2026-11-09-infra-cicd/) | infra-cicd (new, CI/CD section); infra-repo-conventions (1 modified, 1 added); runtime-operations (1 modified: full-stack 503 scenario) |
 
 Each archived change holds its `proposal.md`, `design.md`, `tasks.md`, `verify-report.md` and `archive-report.md` (open obligations for later changes are listed there).
 
