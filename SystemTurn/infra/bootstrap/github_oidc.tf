@@ -1,13 +1,21 @@
 # GitHub Actions OIDC trust for CI. Applied from a workstation only: CI never applies bootstrap.
-# AWS ignores thumbprints for GitHub's issuer, so thumbprint_list is left unset (optional in provider 6.x).
+# The GitHub OIDC provider is account-wide (one per account) and shared with other projects,
+# so it is read, not managed: destroying bootstrap must never delete it. Create it once by hand
+# if missing (see docs/cicd.md).
 locals {
   github_oidc_host = "token.actions.githubusercontent.com"
   state_bucket_arn = "arn:aws:s3:::${var.state_bucket_name}"
 }
 
-resource "aws_iam_openid_connect_provider" "github" {
-  url            = "https://${local.github_oidc_host}"
-  client_id_list = ["sts.amazonaws.com"]
+data "aws_iam_openid_connect_provider" "github" {
+  url = "https://${local.github_oidc_host}"
+
+  lifecycle {
+    postcondition {
+      condition     = contains(self.client_id_list, "sts.amazonaws.com")
+      error_message = "The GitHub OIDC provider must list sts.amazonaws.com as a client ID (audience)."
+    }
+  }
 }
 
 # Plan role: assumable only from pull_request runs of var.github_repository. Read-only.
@@ -19,7 +27,7 @@ resource "aws_iam_role" "plan" {
     Statement = [{
       Effect    = "Allow"
       Action    = "sts:AssumeRoleWithWebIdentity"
-      Principal = { Federated = aws_iam_openid_connect_provider.github.arn }
+      Principal = { Federated = data.aws_iam_openid_connect_provider.github.arn }
       Condition = {
         StringEquals = {
           "${local.github_oidc_host}:aud" = "sts.amazonaws.com"
@@ -66,7 +74,7 @@ resource "aws_iam_role" "apply" {
     Statement = [{
       Effect    = "Allow"
       Action    = "sts:AssumeRoleWithWebIdentity"
-      Principal = { Federated = aws_iam_openid_connect_provider.github.arn }
+      Principal = { Federated = data.aws_iam_openid_connect_provider.github.arn }
       Condition = {
         StringEquals = {
           "${local.github_oidc_host}:aud" = "sts.amazonaws.com"

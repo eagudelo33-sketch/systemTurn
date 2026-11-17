@@ -14,8 +14,8 @@ output "budget_name" {
 }
 
 output "github_oidc_provider_arn" {
-  description = "ARN of the GitHub Actions OIDC provider."
-  value       = aws_iam_openid_connect_provider.github.arn
+  description = "ARN of the GitHub Actions OIDC provider (looked up, not managed)."
+  value       = data.aws_iam_openid_connect_provider.github.arn
 }
 
 output "github_plan_role_arn" {

@@ -1,5 +1,12 @@
 # Offline tests: mocked AWS provider, plan only. Run-block names are spec scenario IDs.
-mock_provider "aws" {}
+mock_provider "aws" {
+  # The OIDC provider is a data source; give it the STS audience so its postcondition holds.
+  mock_data "aws_iam_openid_connect_provider" {
+    defaults = {
+      client_id_list = ["sts.amazonaws.com"]
+    }
+  }
+}
 
 variables {
   state_bucket_name = "systemturn-tfstate-test"

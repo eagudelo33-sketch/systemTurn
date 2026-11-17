@@ -25,7 +25,13 @@ The trust lives in `infra/bootstrap/github_oidc.tf`. CI never applies it.
 
 The repository identity is one variable, `github_repository` (default `eagudelo33-sketch/systemTurn`). If you fork or rename, change it there and nowhere else.
 
-An AWS account has **one** GitHub OIDC provider. If it already exists (`token.actions.githubusercontent.com`), apply fails with `EntityAlreadyExists`. Import it first: `terraform import aws_iam_openid_connect_provider.github arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com`.
+An AWS account has **one** GitHub OIDC provider, often shared with other projects, so bootstrap only **reads** it (data source) and never creates or deletes it. If the account has none yet, create it once before applying:
+
+```bash
+aws iam create-open-id-connect-provider --url https://token.actions.githubusercontent.com --client-id-list sts.amazonaws.com
+```
+
+Plan fails with a postcondition error if the existing provider does not list `sts.amazonaws.com` as a client ID.
 
 ## 3. Secrets and variable
 
