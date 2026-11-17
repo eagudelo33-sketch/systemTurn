@@ -9,12 +9,17 @@ Verification: offline only. OIDC scenarios run via `terraform test` in `infra/bo
 ## Requirements
 
 ### Requirement: OIDC provider and plan role trust
-Bootstrap MUST create the GitHub OIDC provider (`token.actions.githubusercontent.com`, client id `sts.amazonaws.com`) and a plan role. The repository identity MUST be one variable, defaulting to `eagudelo33-sketch/systemTurn`. The plan role trust policy MUST allow only `sts:AssumeRoleWithWebIdentity` with `aud` equal to `sts.amazonaws.com` and `sub` equal to `repo:<repo>:pull_request` (exact match, case-sensitive; no wildcard). The plan role MUST attach `ReadOnlyAccess` plus a policy limited to reading the state bucket, and MUST NOT grant any write action.
+Bootstrap MUST look up the account's existing GitHub OIDC provider (`token.actions.githubusercontent.com`) as a data source and MUST NOT manage it, because the provider is account-wide and may be shared with other projects. The lookup MUST fail if the provider does not list client id `sts.amazonaws.com`. Bootstrap MUST create a plan role. The repository identity MUST be one variable, defaulting to `eagudelo33-sketch/systemTurn`. The plan role trust policy MUST allow only `sts:AssumeRoleWithWebIdentity` with `aud` equal to `sts.amazonaws.com` and `sub` equal to `repo:<repo>:pull_request` (exact match, case-sensitive; no wildcard). The plan role MUST attach `ReadOnlyAccess` plus a policy limited to reading the state bucket, and MUST NOT grant any write action.
 
-#### Scenario: oidc_provider_created
+#### Scenario: oidc_provider_looked_up
 - GIVEN the bootstrap module planned with mocks
-- WHEN `oidc_provider_created` runs
-- THEN one `aws_iam_openid_connect_provider` has the GitHub URL and client id list `["sts.amazonaws.com"]`
+- WHEN `oidc_provider_looked_up` runs
+- THEN `data.aws_iam_openid_connect_provider.github` targets the GitHub URL and no `aws_iam_openid_connect_provider` resource is managed
+
+#### Scenario: oidc_provider_requires_sts_audience
+- GIVEN a mocked provider whose client id list lacks `sts.amazonaws.com`
+- WHEN `oidc_provider_requires_sts_audience` runs
+- THEN the plan fails on the data source postcondition
 
 #### Scenario: plan_role_trust_is_pull_request_only
 - GIVEN the default repo variable

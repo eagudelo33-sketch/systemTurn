@@ -1,9 +1,22 @@
 # Offline tests: mocked AWS provider. Run-block names are spec scenario IDs (infra-cicd).
 # Role runs use `apply` against the mock so the provider ARN is known and compared in the trust.
 mock_provider "aws" {
-  mock_resource "aws_iam_openid_connect_provider" {
+  mock_data "aws_iam_openid_connect_provider" {
     defaults = {
-      arn = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
+      arn            = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
+      client_id_list = ["sts.amazonaws.com"]
+    }
+  }
+}
+
+# Same mock, but the account's provider lacks the STS audience.
+mock_provider "aws" {
+  alias = "wrong_audience"
+
+  mock_data "aws_iam_openid_connect_provider" {
+    defaults = {
+      arn            = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
+      client_id_list = ["example.com"]
     }
   }
 }
@@ -13,17 +26,23 @@ variables {
   alert_emails      = ["a@example.com"]
 }
 
-run "oidc_provider_created" {
+run "oidc_provider_looked_up" {
   command = plan
 
   assert {
-    condition     = aws_iam_openid_connect_provider.github.url == "https://token.actions.githubusercontent.com"
-    error_message = "Provider URL must be the GitHub Actions OIDC issuer."
+    condition     = data.aws_iam_openid_connect_provider.github.url == "https://token.actions.githubusercontent.com"
+    error_message = "Provider lookup must target the GitHub Actions OIDC issuer."
   }
-  assert {
-    condition     = aws_iam_openid_connect_provider.github.client_id_list == toset(["sts.amazonaws.com"])
-    error_message = "client_id_list must be exactly sts.amazonaws.com."
+}
+
+run "oidc_provider_requires_sts_audience" {
+  command = plan
+
+  providers = {
+    aws = aws.wrong_audience
   }
+
+  expect_failures = [data.aws_iam_openid_connect_provider.github]
 }
 
 run "plan_role_trust_is_pull_request_only" {
@@ -36,7 +55,7 @@ run "plan_role_trust_is_pull_request_only" {
   assert {
     condition = (
       jsondecode(aws_iam_role.plan.assume_role_policy).Statement[0].Action == "sts:AssumeRoleWithWebIdentity" &&
-      jsondecode(aws_iam_role.plan.assume_role_policy).Statement[0].Principal.Federated == aws_iam_openid_connect_provider.github.arn
+      jsondecode(aws_iam_role.plan.assume_role_policy).Statement[0].Principal.Federated == data.aws_iam_openid_connect_provider.github.arn
     )
     error_message = "Trust must allow only AssumeRoleWithWebIdentity from the GitHub OIDC provider."
   }
@@ -62,7 +81,7 @@ run "apply_role_trust_is_prod_environment_only" {
   assert {
     condition = (
       jsondecode(aws_iam_role.apply.assume_role_policy).Statement[0].Action == "sts:AssumeRoleWithWebIdentity" &&
-      jsondecode(aws_iam_role.apply.assume_role_policy).Statement[0].Principal.Federated == aws_iam_openid_connect_provider.github.arn &&
+      jsondecode(aws_iam_role.apply.assume_role_policy).Statement[0].Principal.Federated == data.aws_iam_openid_connect_provider.github.arn &&
       jsondecode(aws_iam_role.apply.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:aud"] == "sts.amazonaws.com"
     )
     error_message = "Apply trust must be AssumeRoleWithWebIdentity from the provider with aud sts.amazonaws.com."
