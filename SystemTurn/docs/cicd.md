@@ -23,7 +23,11 @@ The trust lives in `infra/bootstrap/github_oidc.tf`. CI never applies it.
 1. `cd SystemTurn/infra/bootstrap && terraform apply` with your own credentials.
 2. Read the outputs: `github_plan_role_arn`, `github_apply_role_arn`, `state_bucket_name`.
 
-The repository identity is one variable, `github_repository` (default `eagudelo33-sketch/systemTurn`). If you fork or rename, change it there and nowhere else.
+The repository identity is one variable, `github_repository`, in GitHub's **immutable subject** form `owner@owner_id/name@repo_id` (default `eagudelo33-sketch@229485420/systemTurn@1443667873`). Every repository created or renamed after 2026-07-15 gets OIDC tokens whose `sub` carries these numeric IDs, so a name-only value would never match (setting `use_immutable_subject=false` on this repo was accepted but had no effect, 2026-11-17). The IDs also mean a deleted repo recreated under the same name cannot assume the roles. If you fork or rename, read the new value and change it there and nowhere else:
+
+```bash
+gh api repos/<owner>/<repo>/actions/oidc/customization/sub --jq .sub_claim_prefix   # drop the leading 'repo:'
+```
 
 An AWS account has **one** GitHub OIDC provider, often shared with other projects, so bootstrap only **reads** it (data source) and never creates or deletes it. If the account has none yet, create it once before applying:
 

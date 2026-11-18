@@ -9,7 +9,7 @@ Verification: offline only. OIDC scenarios run via `terraform test` in `infra/bo
 ## Requirements
 
 ### Requirement: OIDC provider and plan role trust
-Bootstrap MUST look up the account's existing GitHub OIDC provider (`token.actions.githubusercontent.com`) as a data source and MUST NOT manage it, because the provider is account-wide and may be shared with other projects. The lookup MUST fail if the provider does not list client id `sts.amazonaws.com`. Bootstrap MUST create a plan role. The repository identity MUST be one variable, defaulting to `eagudelo33-sketch/systemTurn`. The plan role trust policy MUST allow only `sts:AssumeRoleWithWebIdentity` with `aud` equal to `sts.amazonaws.com` and `sub` equal to `repo:<repo>:pull_request` (exact match, case-sensitive; no wildcard). The plan role MUST attach `ReadOnlyAccess` plus a policy limited to reading the state bucket, and MUST NOT grant any write action.
+Bootstrap MUST look up the account's existing GitHub OIDC provider (`token.actions.githubusercontent.com`) as a data source and MUST NOT manage it, because the provider is account-wide and may be shared with other projects. The lookup MUST fail if the provider does not list client id `sts.amazonaws.com`. Bootstrap MUST create a plan role. The repository identity MUST be one variable in GitHub's immutable subject form `owner@owner_id/name@repo_id`, defaulting to `eagudelo33-sketch@229485420/systemTurn@1443667873`; a name-only `owner/name` value MUST be rejected, because repositories created or renamed after 2026-07-15 always receive immutable subject claims. The plan role trust policy MUST allow only `sts:AssumeRoleWithWebIdentity` with `aud` equal to `sts.amazonaws.com` and `sub` equal to `repo:<repo>:pull_request` (exact match, case-sensitive; no wildcard). The plan role MUST attach `ReadOnlyAccess` plus a policy limited to reading the state bucket, and MUST NOT grant any write action.
 
 #### Scenario: oidc_provider_looked_up
 - GIVEN the bootstrap module planned with mocks
@@ -24,13 +24,18 @@ Bootstrap MUST look up the account's existing GitHub OIDC provider (`token.actio
 #### Scenario: plan_role_trust_is_pull_request_only
 - GIVEN the default repo variable
 - WHEN `plan_role_trust_is_pull_request_only` runs
-- THEN the trust `sub` is exactly `repo:eagudelo33-sketch/systemTurn:pull_request` and `aud` is `sts.amazonaws.com`
+- THEN the trust `sub` is exactly `repo:eagudelo33-sketch@229485420/systemTurn@1443667873:pull_request` and `aud` is `sts.amazonaws.com`
 - AND the `sub` condition uses `StringEquals` and contains no `*`
 
 #### Scenario: repo_identity_is_single_variable
-- GIVEN `repo` set to `acme/other`
+- GIVEN `repo` set to `acme@111/other@222`
 - WHEN `repo_identity_is_single_variable` runs
-- THEN both role trusts reference `acme/other` and no tracked bootstrap file hardcodes `eagudelo33-sketch` outside the variable default
+- THEN both role trusts reference `acme@111/other@222` and no tracked bootstrap file hardcodes `eagudelo33-sketch` outside the variable default
+
+#### Scenario: repo_identity_rejects_name_only
+- GIVEN `repo` set to the name-only `eagudelo33-sketch/systemTurn`
+- WHEN `repo_identity_rejects_name_only` runs
+- THEN validation of `github_repository` fails
 
 #### Scenario: plan_role_is_read_only
 - GIVEN the plan role policies
@@ -45,7 +50,7 @@ Bootstrap MUST create an apply role whose trust `sub` is exactly `repo:<repo>:en
 #### Scenario: apply_role_trust_is_prod_environment_only
 - GIVEN the default repo variable
 - WHEN `apply_role_trust_is_prod_environment_only` runs
-- THEN the trust `sub` is exactly `repo:eagudelo33-sketch/systemTurn:environment:prod`
+- THEN the trust `sub` is exactly `repo:eagudelo33-sketch@229485420/systemTurn@1443667873:environment:prod`
 - AND it differs from the plan role `sub`
 
 #### Scenario: apply_role_is_state_only
