@@ -87,11 +87,11 @@ Budget alerts do not stop spend. When an alert at 100% (actual or forecast) arri
 
 ## Real-apply checklist
 
-Offline tests cannot prove these. Tick them after the first real apply:
+Offline tests cannot prove these. Tick them after the first real apply (bootstrap applied 2026-11-17):
 
-- [ ] `aws s3api get-bucket-versioning` shows `Enabled`; `get-bucket-encryption` shows `AES256`
-- [ ] `aws s3api get-public-access-block` shows all four flags `true`
-- [ ] A plain-HTTP request to the bucket is denied
-- [ ] `terraform destroy` on bootstrap is blocked by `prevent_destroy`
+- [x] `aws s3api get-bucket-versioning` shows `Enabled`; `get-bucket-encryption` shows `AES256`
+- [x] `aws s3api get-public-access-block` shows all four flags `true`
+- [x] A plain-HTTP request to the bucket is denied
+- [x] `terraform destroy` on bootstrap is blocked by `prevent_destroy`
 - [ ] Two concurrent plans on one env: the second reports a `.tflock` lock
 - [ ] Budget confirmation email received and clicked
