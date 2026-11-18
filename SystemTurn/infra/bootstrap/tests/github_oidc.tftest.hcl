@@ -61,7 +61,7 @@ run "plan_role_trust_is_pull_request_only" {
   }
   assert {
     condition = (
-      jsondecode(aws_iam_role.plan.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:eagudelo33-sketch/systemTurn:pull_request" &&
+      jsondecode(aws_iam_role.plan.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:eagudelo33-sketch@229485420/systemTurn@1443667873:pull_request" &&
       jsondecode(aws_iam_role.plan.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:aud"] == "sts.amazonaws.com"
     )
     error_message = "sub must be exactly repo:<repo>:pull_request and aud sts.amazonaws.com."
@@ -87,7 +87,7 @@ run "apply_role_trust_is_prod_environment_only" {
     error_message = "Apply trust must be AssumeRoleWithWebIdentity from the provider with aud sts.amazonaws.com."
   }
   assert {
-    condition     = jsondecode(aws_iam_role.apply.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:eagudelo33-sketch/systemTurn:environment:prod"
+    condition     = jsondecode(aws_iam_role.apply.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:eagudelo33-sketch@229485420/systemTurn@1443667873:environment:prod"
     error_message = "sub must be exactly repo:<repo>:environment:prod."
   }
   assert {
@@ -165,13 +165,13 @@ run "repo_identity_is_single_variable" {
   command = apply
 
   variables {
-    github_repository = "acme/other"
+    github_repository = "acme@111/other@222"
   }
 
   assert {
     condition = (
-      jsondecode(aws_iam_role.plan.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:acme/other:pull_request" &&
-      jsondecode(aws_iam_role.apply.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:acme/other:environment:prod"
+      jsondecode(aws_iam_role.plan.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:acme@111/other@222:pull_request" &&
+      jsondecode(aws_iam_role.apply.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:acme@111/other@222:environment:prod"
     )
     error_message = "Both trusts must follow var.github_repository."
   }
@@ -182,6 +182,18 @@ run "repo_identity_rejects_invalid" {
 
   variables {
     github_repository = "not a repo"
+  }
+
+  expect_failures = [var.github_repository]
+}
+
+# Name-only identities match no token from a repo using immutable subject claims (all repos
+# created or renamed after 2026-07-15), so they must be rejected, not silently accepted.
+run "repo_identity_rejects_name_only" {
+  command = plan
+
+  variables {
+    github_repository = "eagudelo33-sketch/systemTurn"
   }
 
   expect_failures = [var.github_repository]

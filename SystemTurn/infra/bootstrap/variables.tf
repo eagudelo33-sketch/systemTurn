@@ -55,11 +55,11 @@ variable "owner" {
 
 variable "github_repository" {
   type        = string
-  description = "GitHub repository (owner/name) allowed to assume the CI roles. Single source of truth for the OIDC trust."
-  default     = "eagudelo33-sketch/systemTurn"
+  description = "GitHub repository allowed to assume the CI roles, in the immutable OIDC subject form owner@owner_id/name@repo_id (the sub_claim_prefix of GET /repos/{owner}/{repo}/actions/oidc/customization/sub, without 'repo:'). Single source of truth for the OIDC trust."
+  default     = "eagudelo33-sketch@229485420/systemTurn@1443667873"
 
   validation {
-    condition     = can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", var.github_repository))
-    error_message = "github_repository must look like owner/name."
+    condition     = can(regex("^[A-Za-z0-9_.-]+@[0-9]+/[A-Za-z0-9_.-]+@[0-9]+$", var.github_repository))
+    error_message = "github_repository must use the immutable form owner@owner_id/name@repo_id (e.g. octo-org@123/octo-repo@456)."
   }
 }
